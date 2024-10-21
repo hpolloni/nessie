@@ -295,11 +295,12 @@ def main():
             cycles = cycles.replace('*', '')
             addressing = address_func[addr]
             operations.add(name.lower())
+            print('// Opcode: 0x%s' % opcode)
             print('OpCode { execute: CPU::%s, addressing: CPU::%s, name: "%s", addr_name: "%s", cycles: %s },' % (name.lower(), addressing, name, addr.upper(), cycles))
     print("];")
 
     print("impl CPU {")
-    for op_name in operations:
+    for op_name in sorted(operations):
         print("fn %s(&mut self, _address: Address) {" % op_name)
         print('  todo!("%s Not Implemented")' % op_name)
         print('}')
