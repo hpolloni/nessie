@@ -2987,7 +2987,7 @@ mod tests {
     #[test]
     fn test_nestest_rom() -> Result<(), Box<dyn std::error::Error>> {
         let mut file = File::open("roms/nestest/nestest.nes")?;
-        let expected_cpu_states = parse_nestest_output("roms/nestest/nestest.log")?;
+        let expected_cpu_states = parse_nestest_output("roms/nestest/nestest.expected.out")?;
 
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer).unwrap();
