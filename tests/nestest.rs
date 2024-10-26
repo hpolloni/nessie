@@ -7,7 +7,7 @@ fn test_nestest_rom() -> Result<(), Box<dyn std::error::Error>> {
     let mut file = File::open("roms/nestest/nestest.nes")?;
 
     let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer).unwrap();
+    file.read_to_end(&mut buffer)?;
 
     let mut ram = [0u8; 65536];
 

@@ -2113,7 +2113,7 @@ pub struct CPU {
     y_register: u8,
     program_counter: u16,
     remaining_cycles: u8,
-    bus: Box<dyn Bus>,
+    pub bus: Box<dyn Bus>,
     status: StatusFlags,
     total_cycles: u16,
     stack_pointer: u8,
