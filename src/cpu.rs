@@ -1,3 +1,4 @@
+use assert_matches::assert_matches;
 use std::fmt::Display;
 
 use bitflags::bitflags;
@@ -2202,20 +2203,10 @@ impl CPU {
         }
     }
 
-    fn set_flag(&mut self, flag: StatusFlags, cond: bool) {
-        self.clear_flag(flag);
-
-        if cond {
-            self.status |= flag;
-        }
-    }
-
-    fn clear_flag(&mut self, flag: StatusFlags) {
-        self.status -= flag;
-    }
-
-    fn get_flag(&self, flag: StatusFlags) -> bool {
-        self.status.contains(flag)
+    fn set_zero_or_neg_flags(&mut self, value: u8) {
+        self.status.set(StatusFlags::Z, value == 0);
+        self.status
+            .set(StatusFlags::N, value & StatusFlags::N.bits() != 0);
     }
 }
 
@@ -2227,32 +2218,29 @@ fn s8_to_u16(value: u8) -> u16 {
     return value;
 }
 
+const STACK_PAGE: u16 = 0x0100;
+
 // Operations
 impl CPU {
     fn adc(&mut self, address: Address) {
-        match address {
-            Address::Absolute(address) => {
-                let value = self.bus.read(address);
-                let carry = self.get_flag(StatusFlags::C) as u16;
-                let result: u16 = u16::from(self.accumulator) + u16::from(value) + carry;
-                let result_u8 = result as u8;
+        assert_matches!(address, Address::Absolute(address) => {
+            let value = self.bus.read(address);
+            let carry = self.status.contains(StatusFlags::C) as u16;
+            let result: u16 = u16::from(self.accumulator) + u16::from(value) + carry;
+            let result_u8 = result as u8;
 
-                self.set_flag(StatusFlags::C, result > u16::from(u8::max_value()));
-                self.set_flag(StatusFlags::Z, result_u8 == 0);
+            self.status.set(StatusFlags::C, result > u16::from(u8::max_value()));
+            self.status.set(
+                StatusFlags::O,
+                (!(self.accumulator ^ value)
+                    & (self.accumulator ^ result_u8)
+                    & StatusFlags::N.bits())
+                    > 0,
+            );
+            self.set_zero_or_neg_flags(result_u8);
 
-                self.set_flag(
-                    StatusFlags::O,
-                    (!(self.accumulator ^ value)
-                        & (self.accumulator ^ result_u8)
-                        & StatusFlags::N.bits())
-                        > 0,
-                );
-                self.set_flag(StatusFlags::N, result_u8 & StatusFlags::N.bits() > 0);
-
-                self.accumulator = result_u8;
-            }
-            _ => panic!("ADC called with invalid addressing mode"),
-        }
+            self.accumulator = result_u8;
+        });
     }
 
     fn ahx(&mut self, _address: Address) {
@@ -2267,8 +2255,12 @@ impl CPU {
         todo!("anc Not Implemented")
     }
 
-    fn and(&mut self, _address: Address) {
-        todo!("and Not Implemented")
+    fn and(&mut self, address: Address) {
+        assert_matches!(address, Address::Absolute(address) => {
+            let value = self.bus.read(address);
+            self.accumulator &= value;
+            self.set_zero_or_neg_flags(self.accumulator);
+        });
     }
 
     fn arr(&mut self, _address: Address) {
@@ -2284,82 +2276,98 @@ impl CPU {
     }
 
     fn branch(&mut self, address: Address, cond: bool) {
-        match address {
-            Address::Relative(address) => {
-                let address = s8_to_u16(address).wrapping_add(self.program_counter);
+        assert_matches!(address,
+        Address::Relative(address) => {
+            let address = s8_to_u16(address).wrapping_add(self.program_counter);
 
-                if cond {
-                    if address & 0xff00 != self.program_counter & 0xff00 {
-                        self.remaining_cycles += 2;
-                    } else {
-                        self.remaining_cycles += 1;
-                    }
-                    self.program_counter = address;
+            if cond {
+                if address & 0xff00 != self.program_counter & 0xff00 {
+                    self.remaining_cycles += 2;
+                } else {
+                    self.remaining_cycles += 1;
                 }
+                self.program_counter = address;
             }
-            _ => panic!("Branch opcode called with invalid address mode!"),
-        }
+        });
     }
 
-    fn bcc(&mut self, _address: Address) {
-        todo!("bcc Not Implemented")
+    fn bcc(&mut self, address: Address) {
+        self.branch(address, !self.status.contains(StatusFlags::C));
     }
 
-    fn bcs(&mut self, _address: Address) {
-        todo!("bcs Not Implemented")
+    fn bcs(&mut self, address: Address) {
+        self.branch(address, self.status.contains(StatusFlags::C));
     }
 
     fn beq(&mut self, address: Address) {
-        self.branch(address, self.get_flag(StatusFlags::Z));
+        self.branch(address, self.status.contains(StatusFlags::Z));
     }
 
-    fn bit(&mut self, _address: Address) {
-        todo!("bit Not Implemented")
+    fn bit(&mut self, address: Address) {
+        assert_matches!(address, Address::Absolute(address) => {
+            let value = self.bus.read(address);
+            let mask = StatusFlags::from_bits_truncate(value);
+
+            self.status.set(StatusFlags::Z, self.accumulator & value == 0);
+            self.status.set(StatusFlags::O, mask.contains(StatusFlags::O));
+            self.status.set(StatusFlags::N, mask.contains(StatusFlags::N));
+        });
     }
 
     fn bmi(&mut self, address: Address) {
-        self.branch(address, self.get_flag(StatusFlags::N));
+        self.branch(address, self.status.contains(StatusFlags::N));
     }
 
-    fn bne(&mut self, _address: Address) {
-        todo!("bne Not Implemented")
+    fn bne(&mut self, address: Address) {
+        self.branch(address, !self.status.contains(StatusFlags::Z));
     }
 
-    fn bpl(&mut self, _address: Address) {
-        todo!("bpl Not Implemented")
+    fn bpl(&mut self, address: Address) {
+        self.branch(address, !self.status.contains(StatusFlags::N));
     }
 
     fn brk(&mut self, _address: Address) {
-        self.set_flag(StatusFlags::B, true);
+        self.status |= StatusFlags::B;
         // TODO: stack manipulation
     }
 
-    fn bvc(&mut self, _address: Address) {
-        todo!("bvc Not Implemented")
+    fn bvc(&mut self, address: Address) {
+        self.branch(address, !self.status.contains(StatusFlags::O));
     }
 
-    fn bvs(&mut self, _address: Address) {
-        todo!("bvs Not Implemented")
+    fn bvs(&mut self, address: Address) {
+        self.branch(address, self.status.contains(StatusFlags::O));
     }
 
     fn clc(&mut self, _address: Address) {
-        todo!("clc Not Implemented")
+        self.status -= StatusFlags::C;
     }
 
     fn cld(&mut self, _address: Address) {
-        todo!("cld Not Implemented")
+        self.status -= StatusFlags::D;
     }
 
     fn cli(&mut self, _address: Address) {
-        todo!("cli Not Implemented")
+        self.status -= StatusFlags::I;
     }
 
     fn clv(&mut self, _address: Address) {
-        todo!("clv Not Implemented")
+        self.status -= StatusFlags::O;
     }
 
-    fn cmp(&mut self, _address: Address) {
-        todo!("cmp Not Implemented")
+    fn compare(&mut self, address: Address, register_value: u8) {
+        assert_matches!(address, Address::Absolute(address) => {
+            let value = self.bus.read(address);
+
+            self.status.set(StatusFlags::C, register_value >= value);
+
+            let cmp = register_value.wrapping_sub(value);
+            self.set_zero_or_neg_flags(cmp);
+        });
+    }
+
+    fn cmp(&mut self, address: Address) {
+        self.compare(address, self.accumulator);
     }
 
     fn cpx(&mut self, _address: Address) {
@@ -2386,20 +2394,20 @@ impl CPU {
         todo!("dey Not Implemented")
     }
 
-    fn eor(&mut self, _address: Address) {
-        todo!("eor Not Implemented")
+    fn eor(&mut self, address: Address) {
+        assert_matches!(address, Address::Absolute(address) => {
+            let value = self.bus.read(address);
+            self.accumulator ^= value;
+            self.set_zero_or_neg_flags(self.accumulator);
+        });
     }
 
     fn inc(&mut self, address: Address) {
-        match address {
-            Address::Absolute(address) => {
-                let value = self.bus.read(address).wrapping_add(1);
-                self.set_flag(StatusFlags::Z, value == 0);
-                self.set_flag(StatusFlags::N, value & StatusFlags::N.bits() > 0);
-                self.bus.write(address, value);
-            }
-            _ => panic!("INC called with invalid addressing mode"),
-        }
+        assert_matches!(address, Address::Absolute(address) => {
+            let value = self.bus.read(address).wrapping_add(1);
+            self.set_zero_or_neg_flags(value);
+            self.bus.write(address, value);
+        });
     }
 
     fn inx(&mut self, _address: Address) {
@@ -2407,14 +2415,10 @@ impl CPU {
     }
 
     fn iny(&mut self, address: Address) {
-        match address {
-            Address::Implied => {
-                self.y_register = self.y_register.wrapping_add(1);
-                self.set_flag(StatusFlags::Z, self.y_register == 0);
-                self.set_flag(StatusFlags::N, self.y_register & StatusFlags::N.bits() > 0);
-            }
-            _ => panic!("INY called with invalid addressing mode"),
-        }
+        assert_matches!(address, Address::Implied);
+
+        self.y_register = self.y_register.wrapping_add(1);
+        self.set_zero_or_neg_flags(self.y_register);
     }
 
     fn isc(&mut self, _address: Address) {
@@ -2422,14 +2426,14 @@ impl CPU {
     }
 
     fn jmp(&mut self, address: Address) {
-        match address {
-            Address::Absolute(address) => self.program_counter = address,
-            _ => panic!("LDY called with invalid addressing mode"),
-        }
+        assert_matches!(address, Address::Absolute(address) => self.program_counter = address);
     }
 
-    fn jsr(&mut self, _address: Address) {
-        todo!("jsr Not Implemented")
+    fn jsr(&mut self, address: Address) {
+        assert_matches!(address, Address::Absolute(address) => {
+            self.push_stack_16(self.program_counter - 1);
+            self.program_counter = address;
+        });
     }
 
     fn las(&mut self, _address: Address) {
@@ -2441,39 +2445,24 @@ impl CPU {
     }
 
     fn lda(&mut self, address: Address) {
-        match address {
-            Address::Absolute(address) => {
-                self.accumulator = self.bus.read(address);
-                self.set_flag(StatusFlags::Z, self.accumulator == 0);
-                self.set_flag(
-                    StatusFlags::N,
-                    self.accumulator & StatusFlags::N.bits() != 0,
-                );
-            }
-            _ => panic!("LDA called with invalid addressing mode"),
-        }
+        assert_matches!(address, Address::Absolute(address) => {
+            self.accumulator = self.bus.read(address);
+            self.set_zero_or_neg_flags(self.accumulator);
+        });
     }
 
     fn ldx(&mut self, address: Address) {
-        match address {
-            Address::Absolute(address) => {
-                self.x_register = self.bus.read(address);
-                self.set_flag(StatusFlags::Z, self.x_register == 0);
-                self.set_flag(StatusFlags::N, self.x_register & StatusFlags::N.bits() != 0);
-            }
-            _ => panic!("LDX called with invalid addressing mode"),
-        }
+        assert_matches!(address, Address::Absolute(address) => {
+            self.x_register = self.bus.read(address);
+            self.set_zero_or_neg_flags(self.x_register);
+        });
     }
 
     fn ldy(&mut self, address: Address) {
-        match address {
-            Address::Absolute(address) => {
-                self.y_register = self.bus.read(address);
-                self.set_flag(StatusFlags::Z, self.y_register == 0);
-                self.set_flag(StatusFlags::N, self.y_register & StatusFlags::N.bits() != 0);
-            }
-            _ => panic!("LDY called with invalid addressing mode"),
-        }
+        assert_matches!(address, Address::Absolute(address) => {
+            self.y_register = self.bus.read(address);
+            self.set_zero_or_neg_flags(self.y_register);
+        });
     }
 
     fn lsr(&mut self, _address: Address) {
@@ -2481,27 +2470,40 @@ impl CPU {
     }
 
     fn nop(&mut self, _address: Address) {
-        todo!("nop Not Implemented")
+        // Do nothing (NOP)
     }
 
-    fn ora(&mut self, _address: Address) {
-        todo!("ora Not Implemented")
+    fn ora(&mut self, address: Address) {
+        assert_matches!(address, Address::Absolute(address) => {
+            let value = self.bus.read(address);
+            self.accumulator |= value;
+            self.set_zero_or_neg_flags(self.accumulator);
+        });
     }
 
     fn pha(&mut self, _address: Address) {
-        todo!("pha Not Implemented")
+        self.push_stack(self.accumulator);
     }
 
     fn php(&mut self, _address: Address) {
-        todo!("php Not Implemented")
+        self.push_stack((self.status | StatusFlags::B).bits());
     }
 
     fn pla(&mut self, _address: Address) {
-        todo!("pla Not Implemented")
+        self.accumulator = self.pop_stack();
+        self.set_zero_or_neg_flags(self.accumulator);
     }
 
     fn plp(&mut self, _address: Address) {
-        todo!("plp Not Implemented")
+        let old_status = self.status;
+        let mut new_status = StatusFlags::from_bits_truncate(self.pop_stack());
+
+        // TODO: simplify
+
+        new_status.set(StatusFlags::B, old_status.contains(StatusFlags::B));
+        new_status.set(StatusFlags::X, old_status.contains(StatusFlags::X));
+
+        self.status = new_status;
     }
 
     fn rla(&mut self, _address: Address) {
@@ -2524,8 +2526,10 @@ impl CPU {
         todo!("rti Not Implemented")
     }
 
-    fn rts(&mut self, _address: Address) {
-        todo!("rts Not Implemented")
+    fn rts(&mut self, address: Address) {
+        assert_matches!(address, Address::Implied);
+
+        self.program_counter = self.pop_stack_16() + 1;
     }
 
     fn sax(&mut self, _address: Address) {
@@ -2533,31 +2537,28 @@ impl CPU {
     }
 
     fn sbc(&mut self, address: Address) {
-        match address {
-            Address::Absolute(address) => {
-                let value = self.bus.read(address);
-                let carry = self.get_flag(StatusFlags::C) as u16;
+        assert_matches!(address, Address::Absolute(address) => {
+            let value = self.bus.read(address);
+            let carry = self.status.contains(StatusFlags::C) as u16;
 
-                let result = u16::from(self.accumulator) + u16::from(!value) + carry;
+            let result = u16::from(self.accumulator) + u16::from(!value) + carry;
 
-                let result_u8 = result as u8;
+            let result_u8 = result as u8;
 
-                self.set_flag(StatusFlags::C, result > u16::from(u8::max_value()));
-                self.set_flag(StatusFlags::Z, result_u8 == 0);
-                self.set_flag(
-                    StatusFlags::O,
-                    ((self.accumulator ^ value)
-                        & (self.accumulator ^ result_u8)
-                        & StatusFlags::N.bits())
-                        > 0,
-                );
+            self.status.set(StatusFlags::C, result > u16::from(u8::max_value()));
+            self.status.set(StatusFlags::Z, result_u8 == 0);
+            self.status.set(
+                StatusFlags::O,
+                ((self.accumulator ^ value)
+                    & (self.accumulator ^ result_u8)
+                    & StatusFlags::N.bits())
+                    > 0,
+            );
 
-                self.set_flag(StatusFlags::N, result_u8 & StatusFlags::N.bits() > 0);
+            self.status.set(StatusFlags::N, result_u8 & StatusFlags::N.bits() > 0);
 
-                self.accumulator = result_u8;
-            }
-            _ => panic!("SBC called with invalid address mode"),
-        }
+            self.accumulator = result_u8;
+        });
     }
 
     fn sec(&mut self, _address: Address) {
@@ -2565,11 +2566,11 @@ impl CPU {
     }
 
     fn sed(&mut self, _address: Address) {
-        todo!("sed Not Implemented")
+        self.status |= StatusFlags::D;
     }
 
     fn sei(&mut self, _address: Address) {
-        todo!("sei Not Implemented")
+        self.status |= StatusFlags::I;
     }
 
     fn shx(&mut self, _address: Address) {
@@ -2589,26 +2590,15 @@ impl CPU {
     }
 
     fn sta(&mut self, address: Address) {
-        match address {
-            Address::Absolute(address) => {
-                self.bus.write(address, self.accumulator);
-            }
-            _ => panic!("STA called with invalid addressing mode"),
-        }
+        assert_matches!(address, Address::Absolute(address) => self.bus.write(address, self.accumulator));
     }
 
     fn stx(&mut self, address: Address) {
-        match address {
-            Address::Absolute(address) => self.bus.write(address, self.x_register),
-            _ => panic!("STX called with invalid addressing mode"),
-        }
+        assert_matches!(address, Address::Absolute(address) => self.bus.write(address, self.x_register));
     }
 
     fn sty(&mut self, address: Address) {
-        match address {
-            Address::Absolute(address) => self.bus.write(address, self.y_register),
-            _ => panic!("STY called with invalid addressing mode"),
-        }
+        assert_matches!(address, Address::Absolute(address) => self.bus.write(address, self.y_register));
     }
 
     fn tas(&mut self, _address: Address) {
@@ -2641,6 +2631,31 @@ impl CPU {
 
     fn xaa(&mut self, _address: Address) {
         todo!("xaa Not Implemented")
+    }
+}
+
+// Stack manipulation functions
+impl CPU {
+    fn pop_stack(&mut self) -> u8 {
+        self.stack_pointer = self.stack_pointer.wrapping_add(1);
+        self.bus.read(STACK_PAGE + u16::from(self.stack_pointer))
+    }
+
+    fn pop_stack_16(&mut self) -> u16 {
+        let lo = u16::from(self.pop_stack());
+        let hi = u16::from(self.pop_stack());
+        return (hi << 8) | lo;
+    }
+
+    fn push_stack_16(&mut self, data: u16) {
+        self.push_stack((data >> 8) as u8);
+        self.push_stack(data as u8);
+    }
+
+    fn push_stack(&mut self, data: u8) {
+        self.bus
+            .write(STACK_PAGE + u16::from(self.stack_pointer), data);
+        self.stack_pointer = self.stack_pointer.wrapping_sub(1);
     }
 }
 
@@ -2729,9 +2744,24 @@ impl CPU {
     }
 }
 
+impl Display for CPU {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:#04X} A:{:#04X} X:{:#04X} Y:{:#04X} P:{:#04X} SP:{:#04X}",
+            self.program_counter,
+            self.accumulator,
+            self.x_register,
+            self.y_register,
+            self.status.bits(),
+            self.stack_pointer
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, io::Read};
+    use std::{fmt::Display, fs::File, io::Read};
 
     use super::CPU;
 
@@ -2835,6 +2865,21 @@ mod tests {
         stack_pointer: u8,
     }
 
+    impl Display for CpuState {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(
+                f,
+                "{:#04X} A:{:#04X} X:{:#04X} Y:{:#04X} P:{:#04X} SP:{:#04X}",
+                self.program_counter,
+                self.accumulator,
+                self.x_register,
+                self.y_register,
+                self.status,
+                self.stack_pointer
+            )
+        }
+    }
+
     fn parse_nestest_output(fname: &str) -> Result<Vec<CpuState>, Box<dyn std::error::Error>> {
         let mut file = File::open(fname).unwrap();
         let mut content: String = String::new();
@@ -2885,8 +2930,14 @@ mod tests {
 
         let mut cpu = CPU::new(0xC000, Box::new(ram));
 
-        for i in 0..6 {
-            let expected_cpu_state = &expected_cpu_states[i];
+        println!("Expected                                | Actual");
+        println!(
+            "---------------------------------------------------------------------------------"
+        );
+
+        for expected_cpu_state in expected_cpu_states {
+            println!("{} | {}", expected_cpu_state, cpu);
+
             assert_eq!(expected_cpu_state.program_counter, cpu.program_counter);
             assert_eq!(expected_cpu_state.total_cycles, cpu.total_cycles);
             assert_eq!(expected_cpu_state.x_register, cpu.x_register);
@@ -2894,14 +2945,6 @@ mod tests {
             assert_eq!(expected_cpu_state.status, cpu.status.bits());
             assert_eq!(expected_cpu_state.stack_pointer, cpu.stack_pointer);
 
-            println!(
-                "A:{:#02x} X:{:#02x} Y:{:#02x} P:{:#02x} SP:{:#02x}",
-                expected_cpu_state.accumulator,
-                expected_cpu_state.x_register,
-                expected_cpu_state.y_register,
-                expected_cpu_state.status,
-                expected_cpu_state.stack_pointer
-            );
             cpu.step();
         }
 
