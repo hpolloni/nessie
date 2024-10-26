@@ -2999,13 +2999,14 @@ mod tests {
 
         let mut cpu = CPU::new(0xC000, Box::new(ram));
 
-        println!("Expected                                   | Actual");
+        println!("Expected                                        | Actual");
         println!(
-            "--------------------------------------------------------------------------------"
+            "--------------------------------------------------------------------------------------------"
         );
 
+        let mut step = 1;
         for expected_cpu_state in expected_cpu_states {
-            println!("{} | {}", expected_cpu_state, cpu);
+            println!("{:#04} {} | {}", step, expected_cpu_state, cpu);
 
             assert_eq!(expected_cpu_state.program_counter, cpu.program_counter);
             assert_eq!(expected_cpu_state.total_cycles, cpu.total_cycles);
@@ -3015,6 +3016,7 @@ mod tests {
             assert_eq!(expected_cpu_state.stack_pointer, cpu.stack_pointer);
 
             cpu.step();
+            step += 1;
         }
 
         Ok(())
