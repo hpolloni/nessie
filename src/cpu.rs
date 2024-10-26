@@ -1,5 +1,5 @@
-use assert_matches::assert_matches;
-use std::fmt::Display;
+use assert_matches::debug_assert_matches;
+use std::{fmt::Display, ops::Add};
 
 use bitflags::bitflags;
 
@@ -2223,7 +2223,7 @@ const STACK_PAGE: u16 = 0x0100;
 // Operations
 impl CPU {
     fn adc(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address) => {
             let value = self.bus.read(address);
             let carry = self.status.contains(StatusFlags::C) as u16;
             let result: u16 = u16::from(self.accumulator) + u16::from(value) + carry;
@@ -2256,7 +2256,7 @@ impl CPU {
     }
 
     fn and(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address) => {
             let value = self.bus.read(address);
             self.accumulator &= value;
             self.set_zero_or_neg_flags(self.accumulator);
@@ -2276,7 +2276,7 @@ impl CPU {
     }
 
     fn branch(&mut self, address: Address, cond: bool) {
-        assert_matches!(address,
+        debug_assert_matches!(address,
         Address::Relative(address) => {
             let address = s8_to_u16(address).wrapping_add(self.program_counter);
 
@@ -2304,7 +2304,7 @@ impl CPU {
     }
 
     fn bit(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address) => {
             let value = self.bus.read(address);
             let mask = StatusFlags::from_bits_truncate(value);
 
@@ -2326,7 +2326,9 @@ impl CPU {
         self.branch(address, !self.status.contains(StatusFlags::N));
     }
 
-    fn brk(&mut self, _address: Address) {
+    fn brk(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
         self.status |= StatusFlags::B;
         // TODO: stack manipulation
     }
@@ -2339,24 +2341,31 @@ impl CPU {
         self.branch(address, self.status.contains(StatusFlags::O));
     }
 
-    fn clc(&mut self, _address: Address) {
+    fn clc(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
         self.status -= StatusFlags::C;
     }
 
-    fn cld(&mut self, _address: Address) {
+    fn cld(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
         self.status -= StatusFlags::D;
     }
 
-    fn cli(&mut self, _address: Address) {
+    fn cli(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
         self.status -= StatusFlags::I;
     }
 
-    fn clv(&mut self, _address: Address) {
+    fn clv(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
         self.status -= StatusFlags::O;
     }
 
     fn compare(&mut self, address: Address, register_value: u8) {
-        assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address) => {
             let value = self.bus.read(address);
 
             self.status.set(StatusFlags::C, register_value >= value);
@@ -2370,12 +2379,12 @@ impl CPU {
         self.compare(address, self.accumulator);
     }
 
-    fn cpx(&mut self, _address: Address) {
-        todo!("cpx Not Implemented")
+    fn cpx(&mut self, address: Address) {
+        self.compare(address, self.x_register);
     }
 
-    fn cpy(&mut self, _address: Address) {
-        todo!("cpy Not Implemented")
+    fn cpy(&mut self, address: Address) {
+        self.compare(address, self.y_register);
     }
 
     fn dcp(&mut self, _address: Address) {
@@ -2386,16 +2395,22 @@ impl CPU {
         todo!("dec Not Implemented")
     }
 
-    fn dex(&mut self, _address: Address) {
-        todo!("dex Not Implemented")
+    fn dex(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
+        self.x_register = self.x_register.wrapping_sub(1);
+        self.set_zero_or_neg_flags(self.x_register);
     }
 
-    fn dey(&mut self, _address: Address) {
-        todo!("dey Not Implemented")
+    fn dey(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
+        self.y_register = self.y_register.wrapping_sub(1);
+        self.set_zero_or_neg_flags(self.y_register);
     }
 
     fn eor(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address) => {
             let value = self.bus.read(address);
             self.accumulator ^= value;
             self.set_zero_or_neg_flags(self.accumulator);
@@ -2403,19 +2418,22 @@ impl CPU {
     }
 
     fn inc(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address) => {
             let value = self.bus.read(address).wrapping_add(1);
             self.set_zero_or_neg_flags(value);
             self.bus.write(address, value);
         });
     }
 
-    fn inx(&mut self, _address: Address) {
-        todo!("inx Not Implemented")
+    fn inx(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
+        self.x_register = self.x_register.wrapping_add(1);
+        self.set_zero_or_neg_flags(self.x_register);
     }
 
     fn iny(&mut self, address: Address) {
-        assert_matches!(address, Address::Implied);
+        debug_assert_matches!(address, Address::Implied);
 
         self.y_register = self.y_register.wrapping_add(1);
         self.set_zero_or_neg_flags(self.y_register);
@@ -2426,11 +2444,11 @@ impl CPU {
     }
 
     fn jmp(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => self.program_counter = address);
+        debug_assert_matches!(address, Address::Absolute(address) => self.program_counter = address);
     }
 
     fn jsr(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address) => {
             self.push_stack_16(self.program_counter - 1);
             self.program_counter = address;
         });
@@ -2445,56 +2463,81 @@ impl CPU {
     }
 
     fn lda(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address) => {
             self.accumulator = self.bus.read(address);
             self.set_zero_or_neg_flags(self.accumulator);
         });
     }
 
     fn ldx(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address) => {
             self.x_register = self.bus.read(address);
             self.set_zero_or_neg_flags(self.x_register);
         });
     }
 
     fn ldy(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address) => {
             self.y_register = self.bus.read(address);
             self.set_zero_or_neg_flags(self.y_register);
         });
     }
 
-    fn lsr(&mut self, _address: Address) {
-        todo!("lsr Not Implemented")
+    fn lsr(&mut self, address: Address) {
+        let mut inner = |value: u8| -> u8 {
+            self.status.set(StatusFlags::C, value & 1 == 1);
+            let shifted_value = value >> 1;
+            self.status.set(StatusFlags::Z, shifted_value == 0);
+            self.status.set(StatusFlags::N, false);
+            return shifted_value;
+        };
+
+        match address {
+            Address::Implied => self.accumulator = inner(self.accumulator),
+            Address::Absolute(address) => {
+                let value = inner(self.bus.read(address));
+                self.bus.write(address, value);
+            }
+            _ => panic!("LSR opcode with relative addressing"),
+        }
     }
 
-    fn nop(&mut self, _address: Address) {
+    fn nop(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
         // Do nothing (NOP)
     }
 
     fn ora(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address) => {
             let value = self.bus.read(address);
             self.accumulator |= value;
             self.set_zero_or_neg_flags(self.accumulator);
         });
     }
 
-    fn pha(&mut self, _address: Address) {
+    fn pha(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
         self.push_stack(self.accumulator);
     }
 
-    fn php(&mut self, _address: Address) {
+    fn php(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
         self.push_stack((self.status | StatusFlags::B).bits());
     }
 
-    fn pla(&mut self, _address: Address) {
+    fn pla(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
         self.accumulator = self.pop_stack();
         self.set_zero_or_neg_flags(self.accumulator);
     }
 
-    fn plp(&mut self, _address: Address) {
+    fn plp(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
         let old_status = self.status;
         let mut new_status = StatusFlags::from_bits_truncate(self.pop_stack());
 
@@ -2522,12 +2565,13 @@ impl CPU {
         todo!("rra Not Implemented")
     }
 
-    fn rti(&mut self, _address: Address) {
-        todo!("rti Not Implemented")
+    fn rti(&mut self, address: Address) {
+        self.plp(address);
+        self.program_counter = self.pop_stack_16();
     }
 
     fn rts(&mut self, address: Address) {
-        assert_matches!(address, Address::Implied);
+        debug_assert_matches!(address, Address::Implied);
 
         self.program_counter = self.pop_stack_16() + 1;
     }
@@ -2537,7 +2581,7 @@ impl CPU {
     }
 
     fn sbc(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address) => {
             let value = self.bus.read(address);
             let carry = self.status.contains(StatusFlags::C) as u16;
 
@@ -2561,15 +2605,21 @@ impl CPU {
         });
     }
 
-    fn sec(&mut self, _address: Address) {
+    fn sec(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
         self.status |= StatusFlags::C;
     }
 
-    fn sed(&mut self, _address: Address) {
+    fn sed(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
         self.status |= StatusFlags::D;
     }
 
-    fn sei(&mut self, _address: Address) {
+    fn sei(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
         self.status |= StatusFlags::I;
     }
 
@@ -2590,43 +2640,62 @@ impl CPU {
     }
 
     fn sta(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => self.bus.write(address, self.accumulator));
+        debug_assert_matches!(address, Address::Absolute(address) => self.bus.write(address, self.accumulator));
     }
 
     fn stx(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => self.bus.write(address, self.x_register));
+        debug_assert_matches!(address, Address::Absolute(address) => self.bus.write(address, self.x_register));
     }
 
     fn sty(&mut self, address: Address) {
-        assert_matches!(address, Address::Absolute(address) => self.bus.write(address, self.y_register));
+        debug_assert_matches!(address, Address::Absolute(address) => self.bus.write(address, self.y_register));
     }
 
     fn tas(&mut self, _address: Address) {
         todo!("tas Not Implemented")
     }
 
-    fn tax(&mut self, _address: Address) {
-        todo!("tax Not Implemented")
+    fn tax(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
+        self.x_register = self.accumulator;
+
+        self.set_zero_or_neg_flags(self.x_register);
     }
 
-    fn tay(&mut self, _address: Address) {
-        todo!("tay Not Implemented")
+    fn tay(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
+        self.y_register = self.accumulator;
+
+        self.set_zero_or_neg_flags(self.y_register);
     }
 
-    fn tsx(&mut self, _address: Address) {
-        todo!("tsx Not Implemented")
+    fn tsx(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
+        self.x_register = self.stack_pointer;
+        self.set_zero_or_neg_flags(self.x_register);
     }
 
-    fn txa(&mut self, _address: Address) {
-        todo!("txa Not Implemented")
+    fn txa(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
+        self.accumulator = self.x_register;
+        self.set_zero_or_neg_flags(self.x_register);
     }
 
-    fn txs(&mut self, _address: Address) {
-        todo!("txs Not Implemented")
+    fn txs(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
+        self.stack_pointer = self.x_register;
     }
 
-    fn tya(&mut self, _address: Address) {
-        todo!("tya Not Implemented")
+    fn tya(&mut self, address: Address) {
+        debug_assert_matches!(address, Address::Implied);
+
+        self.accumulator = self.y_register;
+        self.set_zero_or_neg_flags(self.y_register);
     }
 
     fn xaa(&mut self, _address: Address) {
@@ -2930,9 +2999,9 @@ mod tests {
 
         let mut cpu = CPU::new(0xC000, Box::new(ram));
 
-        println!("Expected                                | Actual");
+        println!("Expected                                   | Actual");
         println!(
-            "---------------------------------------------------------------------------------"
+            "--------------------------------------------------------------------------------"
         );
 
         for expected_cpu_state in expected_cpu_states {
