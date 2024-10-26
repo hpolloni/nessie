@@ -13,7 +13,7 @@ pub trait Bus {
     }
 }
 
-impl Bus for Vec<u8> {
+impl Bus for [u8; 65536] {
     fn read(&self, address: u16) -> u8 {
         self[address as usize]
     }
@@ -2152,6 +2152,8 @@ pub struct CPU {
     remaining_cycles: u8,
     bus: Box<dyn Bus>,
     status: StatusFlags,
+    total_cycles: u16,
+    stack_pointer: u8,
 }
 
 impl CPU {
@@ -2162,16 +2164,16 @@ impl CPU {
             y_register: 0x00,
             program_counter: pc,
             remaining_cycles: 0,
+            total_cycles: 0,
+            stack_pointer: 0xfd,
             bus,
-            status: StatusFlags::I,
+            status: StatusFlags::from_bits_truncate(0x24),
         }
     }
 
     fn cycle(&mut self) {
         if self.remaining_cycles == 0 {
-            // TODO: log instead of print
             let opcode = self.bus.read(self.program_counter);
-            let current_pc = self.program_counter; // for logging
 
             self.program_counter += 1;
 
@@ -2179,23 +2181,11 @@ impl CPU {
 
             let address = (op.addressing)(self);
 
-            println!(
-                "{:#04x} {:#02x} {} {} {} A:{:02X} X:{:02X} Y:{:02X} P:{}",
-                current_pc,
-                opcode,
-                op.name,
-                op.addr_name,
-                address,
-                self.accumulator,
-                self.x_register,
-                self.y_register,
-                self.status,
-            );
-
             (op.execute)(self, address);
 
             self.remaining_cycles += op.cycles;
         }
+        self.total_cycles += 1;
         self.remaining_cycles -= 1;
     }
 
@@ -2688,7 +2678,18 @@ impl CPU {
     }
 
     fn absolute_x(&mut self) -> Address {
-        todo!("absolute_x")
+        let address: u16 = self.bus.read16(self.program_counter);
+        let offset_address: u16 = address + u16::from(self.x_register);
+
+        self.remaining_cycles += if (offset_address) & 0xff00 != address & 0xff00 {
+            // Extra time for crossing a page boundary
+            1
+        } else {
+            0
+        };
+
+        self.program_counter += 2;
+        Address::Absolute(offset_address)
     }
 
     fn absolute_y(&mut self) -> Address {
@@ -2700,7 +2701,21 @@ impl CPU {
     }
 
     fn indirect_x(&mut self) -> Address {
-        todo!("indirect_x")
+        let indirect_address = self.bus.read(self.program_counter);
+
+        // Simulate bug at page edge
+        let address = ((self.bus.read(
+            indirect_address
+                .wrapping_add(self.x_register)
+                .wrapping_add(1) as u16,
+        ) as u16)
+            << 8)
+            | self
+                .bus
+                .read(indirect_address.wrapping_add(self.x_register) as u16) as u16;
+
+        self.program_counter += 1;
+        Address::Absolute(address)
     }
 
     fn indirect_y(&mut self) -> Address {
@@ -2716,6 +2731,8 @@ impl CPU {
 
 #[cfg(test)]
 mod tests {
+    use std::{fs::File, io::Read};
+
     use super::CPU;
 
     #[test]
@@ -2732,7 +2749,7 @@ mod tests {
             0x00, // BRK
         ];
 
-        let mut ram = vec![0u8; 65536];
+        let mut ram = [0u8; 65536];
         ram[0x0000..program.len()].copy_from_slice(&program);
 
         let mut cpu = CPU::new(0x00, Box::new(ram));
@@ -2774,28 +2791,28 @@ mod tests {
 
     #[test]
     fn test_euclid_algo() {
+        // From https://github.com/mre/mos6502/blob/master/examples/asm/euclid/euclid.a65
         let program = [
-            // (F)irst | (S)econd
             // .algo
-            0xa5, 0x00, // Load from F to A
+            0xa5, 0x00, // LDA $00
             // .algo_
-            0x38, // Set carry flag
-            0xe5, 0x01, // Substract S from number in A (from F)
-            0xf0, 0x07, // Jump to .end if diff is zero
-            0x30, 0x08, // Jump to .swap if diff is negative
-            0x85, 0x00, // Load A to F
-            0x4c, 0x12, 0x00, // Jump to .algo_
+            0x38, // SEC
+            0xe5, 0x01, // SBC $01
+            0xf0, 0x07, // BEQ end
+            0x30, 0x08, // BMI swap
+            0x85, 0x00, // STA $00
+            0x4c, 0x12, 0x00, // JMP algo_
             // .end
-            0xa5, 0x00, // Load from S to A
+            0xa5, 0x00, // LDA $00
             0x00, // .swap
-            0xa6, 0x00, // load F to X
-            0xa4, 0x01, // load S to Y
-            0x86, 0x01, // Store X to F
-            0x84, 0x00, // Store Y to S
-            0x4c, 0x10, 0x00, // Jump to .algo
+            0xa6, 0x00, // LDX $00
+            0xa4, 0x01, // LDY $01
+            0x86, 0x01, // STX $01
+            0x84, 0x00, // STY $00
+            0x4c, 0x10, 0x00, // JMP algo
         ];
 
-        let mut ram = vec![0u8; 65536];
+        let mut ram = [0u8; 65536];
         ram[0x00] = 30;
         ram[0x01] = 20;
         ram[0x10..0x10 + program.len()].copy_from_slice(&program);
@@ -2803,5 +2820,91 @@ mod tests {
         let mut cpu = CPU::new(0x10, Box::new(ram));
 
         cpu.run_until_brk();
+
+        assert_eq!(10, cpu.accumulator);
+    }
+
+    #[derive(Debug)]
+    struct CpuState {
+        program_counter: u16,
+        total_cycles: u16,
+        accumulator: u8,
+        x_register: u8,
+        y_register: u8,
+        status: u8,
+        stack_pointer: u8,
+    }
+
+    fn parse_nestest_output(fname: &str) -> Result<Vec<CpuState>, Box<dyn std::error::Error>> {
+        let mut file = File::open(fname).unwrap();
+        let mut content: String = String::new();
+        file.read_to_string(&mut content).unwrap();
+
+        let mut cpu_states = vec![];
+        for line in content.lines() {
+            // Skip empty lines and comments
+            if !line.is_empty() && !line.starts_with("#") {
+                let program_counter = u16::from_str_radix(&line[0..4], 16)?;
+                let accumulator = u8::from_str_radix(&line[50..52].trim(), 16)?;
+                let x_register = u8::from_str_radix(&line[55..57].trim(), 16)?;
+                let y_register = u8::from_str_radix(&line[60..62].trim(), 16)?;
+                let status = u8::from_str_radix(&line[65..67].trim(), 16)?;
+                let stack_pointer = u8::from_str_radix(&line[71..73].trim(), 16)?;
+
+                let total_cycles = &line[90..].trim().parse::<u16>()?;
+
+                // TODO: Figure out why nestest start at 7 total cycles instead of 0
+                let total_cycles = total_cycles - 7;
+
+                cpu_states.push(CpuState {
+                    program_counter,
+                    accumulator,
+                    total_cycles,
+                    x_register,
+                    y_register,
+                    status,
+                    stack_pointer,
+                });
+            }
+        }
+        Ok(cpu_states)
+    }
+
+    #[test]
+    fn test_nestest_rom() -> Result<(), Box<dyn std::error::Error>> {
+        let mut file = File::open("roms/nestest/nestest.nes")?;
+        let expected_cpu_states = parse_nestest_output("roms/nestest/nestest.log")?;
+
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).unwrap();
+
+        let mut ram = [0u8; 65536];
+
+        ram[0x8000..0xBFFF].copy_from_slice(&buffer[0x0010..0x400f]);
+        ram[0xC000..0xFFFF].copy_from_slice(&buffer[0x0010..0x400f]);
+
+        let mut cpu = CPU::new(0xC000, Box::new(ram));
+
+        for i in 0..6 {
+            let expected_cpu_state = &expected_cpu_states[i];
+            assert_eq!(expected_cpu_state.program_counter, cpu.program_counter);
+            assert_eq!(expected_cpu_state.total_cycles, cpu.total_cycles);
+            assert_eq!(expected_cpu_state.x_register, cpu.x_register);
+            assert_eq!(expected_cpu_state.y_register, cpu.y_register);
+            assert_eq!(expected_cpu_state.status, cpu.status.bits());
+            assert_eq!(expected_cpu_state.stack_pointer, cpu.stack_pointer);
+
+            println!(
+                "A:{:#02x} X:{:#02x} Y:{:#02x} P:{:#02x} SP:{:#02x}",
+                expected_cpu_state.accumulator,
+                expected_cpu_state.x_register,
+                expected_cpu_state.y_register,
+                expected_cpu_state.status,
+                expected_cpu_state.stack_pointer
+            );
+            cpu.step();
+        }
+
+        Ok(())
     }
 }
