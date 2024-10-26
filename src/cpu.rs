@@ -57,9 +57,9 @@ impl OpCode {
             "ABS" => 3,
             "IMP" => 1,
             "IMM" => 2,
-            "ZP"  => 2,
+            "ZP" => 2,
             "REL" => 2,
-            x => panic!("Invalid addressing mode {}", x)
+            x => panic!("Invalid addressing mode {}", x),
         }
     }
 }
@@ -2200,10 +2200,11 @@ impl CPU {
         let op = OPCODE_TABLE[opcode as usize];
 
         let hexdump = self.hexdump(self.program_counter, self.program_counter + op.len() as u16);
-        
+
         let asm = format!("{}{:28}", op.name, " ");
         let ppu = " ".repeat(11);
-        format!("{:04X}  {:9} {} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} {} CYC:{}",
+        format!(
+            "{:04X}  {:9} {} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} {} CYC:{}",
             self.program_counter,
             hexdump,
             asm,
@@ -2213,7 +2214,8 @@ impl CPU {
             self.status.bits(),
             self.stack_pointer,
             ppu,
-        self.total_cycles + 7) // TODO figure this out
+            self.total_cycles + 7
+        ) // TODO figure this out
     }
 
     // TODO: consider if this should be in the Bus trait instead
@@ -2283,12 +2285,14 @@ impl CPU {
         todo!("arr Not Implemented")
     }
 
+    // TODO: find a way to refactor asl, ror and lsr
     fn asl(&mut self, address: Address) {
         let mut inner = |value: u8| -> u8 {
             self.status.set(StatusFlags::C, value >> 7 == 1);
             let value = value << 1;
             self.status.set(StatusFlags::Z, value == 0);
-            self.status.set(StatusFlags::N, value & StatusFlags::N.bits() != 0);
+            self.status
+                .set(StatusFlags::N, value & StatusFlags::N.bits() != 0);
             value
         };
 
@@ -2582,12 +2586,62 @@ impl CPU {
         todo!("rla Not Implemented")
     }
 
-    fn rol(&mut self, _address: Address) {
-        todo!("rol Not Implemented")
+    fn rol(&mut self, address: Address) {
+        let mut inner = |value: u8| -> u8 {
+            // Save carry flag
+            let carry = if self.status.contains(StatusFlags::C) {
+                1
+            } else {
+                0
+            };
+
+            self.status.set(StatusFlags::C, value >> 7 == 1);
+
+            let value = value << 1 | carry;
+
+            self.status.set(StatusFlags::Z, value == 0);
+            self.status
+                .set(StatusFlags::N, value & StatusFlags::N.bits() != 0);
+            value
+        };
+
+        match address {
+            Address::Implied => self.accumulator = inner(self.accumulator),
+            Address::Absolute(address) => {
+                let value = inner(self.bus.read(address));
+                self.bus.write(address, value);
+            }
+            _ => panic!("ROR opcode with relative addressing"),
+        }
     }
 
-    fn ror(&mut self, _address: Address) {
-        todo!("ror Not Implemented")
+    fn ror(&mut self, address: Address) {
+        let mut inner = |value: u8| -> u8 {
+            // Save carry flag
+            let carry = if self.status.contains(StatusFlags::C) {
+                1
+            } else {
+                0
+            };
+
+            self.status.set(StatusFlags::C, value & 1 == 1);
+
+            let value = value >> 1 | carry << 7;
+
+            self.status.set(StatusFlags::Z, value == 0);
+            self.status
+                .set(StatusFlags::N, value & StatusFlags::N.bits() != 0);
+            value
+        };
+
+        match address {
+            Address::Implied => self.accumulator = inner(self.accumulator),
+            Address::Absolute(address) => {
+                let value = inner(self.bus.read(address));
+                self.bus.write(address, value);
+            }
+            _ => panic!("ROR opcode with relative addressing"),
+        }
     }
 
     fn rra(&mut self, _address: Address) {
@@ -2842,7 +2896,6 @@ impl CPU {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::{fmt::Display, fs::File, io::Read};
@@ -2975,7 +3028,7 @@ mod tests {
             assert_eq!(&line[86..], &trace[86..]);
             cpu.step();
         }
-            
+
         Ok(())
     }
 }
