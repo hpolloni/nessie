@@ -25,14 +25,14 @@ impl Display for Address {
 #[derive(Debug, Copy, Clone)]
 struct OpCode {
     execute: fn(&mut CPU, Address),
-    addressing: fn(&mut CPU) -> Address,
+    addressing: fn(&CPU) -> Address,
     name: &'static str,
     addr_name: &'static str,
     cycles: u8,
 }
 
 impl OpCode {
-    fn len(&self) -> u8 {
+    fn len(&self) -> u16 {
         // TODO: consider making this an enum instead
         match self.addr_name {
             "ABS" => 3,
@@ -2155,6 +2155,8 @@ impl CPU {
 
             let address = (op.addressing)(self);
 
+            self.program_counter += op.len() - 1;
+
             (op.execute)(self, address);
 
             self.remaining_cycles += op.cycles;
@@ -2187,7 +2189,7 @@ impl CPU {
 
         let op = OPCODE_TABLE[opcode as usize];
 
-        let hexdump = self.hexdump(self.program_counter, self.program_counter + op.len() as u16);
+        let hexdump = self.hexdump(self.program_counter, self.program_counter + op.len());
 
         let asm = format!("{}{:28}", op.name, " ");
         let ppu = " ".repeat(11);
@@ -2808,78 +2810,58 @@ impl CPU {
     }
 }
 
-// Addressing modes
 impl CPU {
-    fn implied(&mut self) -> Address {
+    fn implied(&self) -> Address {
         Address::Implied
     }
 
-    fn immediate(&mut self) -> Address {
+    fn immediate(&self) -> Address {
         let address = self.program_counter;
-        self.program_counter += 1;
 
         Address::Absolute(address)
     }
 
-    fn zero_page(&mut self) -> Address {
+    fn zero_page(&self) -> Address {
         let address = u16::from(self.bus.read(self.program_counter));
-        self.program_counter += 1;
         Address::Absolute(address)
     }
 
-    fn zero_page_x(&mut self) -> Address {
+    fn zero_page_x(&self) -> Address {
         let address = self
             .bus
             .read(self.program_counter)
             .wrapping_add(self.x_register);
-        self.program_counter += 1;
         Address::Absolute(u16::from(address))
     }
 
-    fn zero_page_y(&mut self) -> Address {
+    fn zero_page_y(&self) -> Address {
         let address = self
             .bus
             .read(self.program_counter)
             .wrapping_add(self.y_register);
-        self.program_counter += 1;
         Address::Absolute(u16::from(address))
     }
 
-    fn absolute(&mut self) -> Address {
+    fn absolute(&self) -> Address {
         let address = self.bus.read16(self.program_counter);
-        self.program_counter += 2;
         Address::Absolute(address)
     }
 
-    fn absolute_x(&mut self) -> Address {
+    fn absolute_x(&self) -> Address {
         let address: u16 = self.bus.read16(self.program_counter);
         let offset_address: u16 = address.wrapping_add(self.x_register as u16);
 
-        self.remaining_cycles = if offset_address & 0xff00 != address & 0xff00 {
-            1
-        } else {
-            0
-        };
-
-        self.program_counter += 2;
         Address::Absolute(offset_address)
     }
 
-    fn absolute_y(&mut self) -> Address {
+    fn absolute_y(&self) -> Address {
         let address: u16 = self.bus.read16(self.program_counter);
         let offset_address: u16 = address.wrapping_add(self.y_register as u16);
 
-        self.remaining_cycles += if (offset_address) & 0xff00 != address & 0xff00 {
-            1
-        } else {
-            0
-        };
-
-        self.program_counter += 2;
         Address::Absolute(offset_address)
     }
 
-    fn indirect(&mut self) -> Address {
+    fn indirect(&self) -> Address {
         let indirect_address = self.bus.read16(self.program_counter);
 
         let page = indirect_address & 0xff00;
@@ -2889,11 +2871,10 @@ impl CPU {
 
         let address = address_hi | address_lo;
 
-        self.program_counter += 2;
         Address::Absolute(address)
     }
 
-    fn indirect_x(&mut self) -> Address {
+    fn indirect_x(&self) -> Address {
         let indirect_address = self
             .bus
             .read(self.program_counter)
@@ -2905,11 +2886,10 @@ impl CPU {
 
         let address = address_hi | address_lo;
 
-        self.program_counter += 1;
         Address::Absolute(address)
     }
 
-    fn indirect_y(&mut self) -> Address {
+    fn indirect_y(&self) -> Address {
         let indirect_address = self.bus.read(self.program_counter);
         let indirect_address_plus_one = indirect_address.wrapping_add(1) as u16;
 
@@ -2920,19 +2900,11 @@ impl CPU {
 
         let offset_address = address.wrapping_add(u16::from(self.y_register));
 
-        self.remaining_cycles += if (offset_address) & 0xff00 != address & 0xff00 {
-            1
-        } else {
-            0
-        };
-
-        self.program_counter += 1;
         Address::Absolute(offset_address)
     }
 
-    fn relative(&mut self) -> Address {
+    fn relative(&self) -> Address {
         let relative_address = self.bus.read(self.program_counter);
-        self.program_counter += 1;
         Address::Relative(relative_address)
     }
 }
