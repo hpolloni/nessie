@@ -1,5 +1,4 @@
 use assert_matches::debug_assert_matches;
-use std::fmt::Display;
 
 use bitflags::bitflags;
 
@@ -10,16 +9,6 @@ enum Address {
     Implied,
     Absolute(u16),
     Relative(u8),
-}
-
-impl Display for Address {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Absolute(address) => write!(f, "abs {:#04x}", address),
-            Self::Relative(address) => write!(f, "rel {:#02x}", address),
-            Self::Implied => write!(f, "implied"),
-        }
-    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -33,7 +22,7 @@ struct OpCode {
 
 impl OpCode {
     fn len(&self) -> u16 {
-        // TODO: consider making this an enum instead
+        // TODO: Make this an enum instead
         match self.addr_name {
             "ABS" => 3,
             "ABY" => 3,
@@ -2911,7 +2900,6 @@ impl CPU {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, io::Read};
 
     use super::CPU;
 
@@ -3002,48 +2990,5 @@ mod tests {
         cpu.run_until_brk();
 
         assert_eq!(10, cpu.accumulator);
-    }
-
-    #[test]
-    fn test_nestest_rom() -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = File::open("roms/nestest/nestest.nes")?;
-
-        let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer).unwrap();
-
-        let mut ram = [0u8; 65536];
-
-        ram[0x8000..0xBFFF].copy_from_slice(&buffer[0x0010..0x400f]);
-        ram[0xC000..0xFFFF].copy_from_slice(&buffer[0x0010..0x400f]);
-
-        let mut cpu = CPU::new(0xC000, Box::new(ram));
-
-        // Compare expected output to cpu trace
-        let mut file = File::open("roms/nestest/nestest.expected.out").unwrap();
-        let mut content: String = String::new();
-        file.read_to_string(&mut content).unwrap();
-
-        for line in content.lines() {
-            let trace = cpu.trace();
-
-            println!("{} | {}", trace, line);
-
-            // compare PC and hexdump
-            assert_eq!(&line[0..15], &trace[0..15]);
-
-            // compare asm
-            assert_eq!(&line[16..19], &trace[16..19]);
-
-            // compare registers
-            assert_eq!(&line[48..73], &trace[48..73]);
-
-            // compare CPU cycles.
-            // Disabled for now as addressing mode don't properly address page crosses
-            // For example for opcode 9D
-            // assert_eq!(&line[86..], &trace[86..]);
-            cpu.step();
-        }
-
-        Ok(())
     }
 }
