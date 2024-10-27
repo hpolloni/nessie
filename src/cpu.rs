@@ -2115,7 +2115,7 @@ pub struct CPU {
     remaining_cycles: u8,
     pub bus: Box<dyn Bus>,
     status: StatusFlags,
-    total_cycles: u16,
+    total_cycles: u64,
     stack_pointer: u8,
 }
 
@@ -2244,12 +2244,14 @@ impl CPU {
         todo!("ahx Not Implemented")
     }
 
-    fn alr(&mut self, _address: Address) {
-        todo!("alr Not Implemented")
+    fn alr(&mut self, address: Address) {
+        self.and(address);
+        self.lsr(Address::Implied);
     }
 
-    fn anc(&mut self, _address: Address) {
-        todo!("anc Not Implemented")
+    fn anc(&mut self, address: Address) {
+        self.and(address);
+        self.status.set(StatusFlags::C, self.accumulator >> 7 == 1);
     }
 
     fn and(&mut self, address: Address) {

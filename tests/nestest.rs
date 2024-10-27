@@ -1,6 +1,6 @@
 use std::{fs::File, io::Read};
 
-use nessie::cpu::CPU;
+use nessie::{bus::Bus, cpu::CPU};
 
 #[test]
 fn test_nestest_rom() -> Result<(), Box<dyn std::error::Error>> {
@@ -35,12 +35,15 @@ fn test_nestest_rom() -> Result<(), Box<dyn std::error::Error>> {
         // compare registers
         assert_eq!(&line[48..73], &trace[48..73]);
 
-        // compare CPU cycles.
+        // TODO: compare CPU cycles.
         // Disabled for now as addressing mode don't properly address page crosses
         // For example for opcode 9D
         // assert_eq!(&line[86..], &trace[86..]);
         cpu.step();
     }
+
+    assert_eq!(0x00, ram.read(0x02));
+    assert_eq!(0x00, ram.read(0x03));
 
     Ok(())
 }
