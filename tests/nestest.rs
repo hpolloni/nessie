@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read};
+use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
 
 use nessie::{bus::Bus, cpu::CPU};
 
@@ -14,10 +14,10 @@ fn test_nestest_rom() -> Result<(), Box<dyn std::error::Error>> {
     ram[0x8000..0xBFFF].copy_from_slice(&buffer[0x0010..0x400f]);
     ram[0xC000..0xFFFF].copy_from_slice(&buffer[0x0010..0x400f]);
 
-    let mut cpu = CPU::new(0xC000, Box::new(ram));
+    let mut cpu = CPU::new(0xC000, Rc::new(RefCell::new(ram)));
 
     // Compare expected output to cpu trace
-    let mut file = File::open("roms/nestest/nestest.expected.out").unwrap();
+    let mut file = File::open("roms/nestest/nestest.expected.out")?;
     let mut content: String = String::new();
     file.read_to_string(&mut content).unwrap();
 

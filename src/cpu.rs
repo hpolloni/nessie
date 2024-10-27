@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use assert_matches::debug_assert_matches;
 
 use bitflags::bitflags;
@@ -1871,14 +1873,14 @@ pub struct CPU {
     y_register: u8,
     program_counter: u16,
     remaining_cycles: u8,
-    pub bus: Box<dyn Bus>,
+    bus: Rc<RefCell<dyn Bus>>,
     status: StatusFlags,
     total_cycles: u64,
     stack_pointer: u8,
 }
 
 impl CPU {
-    pub fn new(pc: u16, bus: Box<dyn Bus>) -> Self {
+    pub fn new(pc: u16, bus: Rc<RefCell<dyn Bus>>) -> Self {
         Self {
             accumulator: 0x00,
             x_register: 0x00,
@@ -2639,6 +2641,10 @@ impl CPU {
 #[cfg(test)]
 mod tests {
 
+    use std::{cell::RefCell, rc::Rc};
+
+    use crate::bus::Bus;
+
     use super::CPU;
 
     #[test]
@@ -2658,7 +2664,9 @@ mod tests {
         let mut ram = [0u8; 65536];
         ram[0x0000..program.len()].copy_from_slice(&program);
 
-        let mut cpu = CPU::new(0x00, Box::new(ram));
+        let bus = Rc::new(RefCell::new(ram));
+
+        let mut cpu = CPU::new(0x00, bus.clone());
 
         // LDA #$10
         cpu.step();
@@ -2668,7 +2676,7 @@ mod tests {
         // STA $20
         cpu.step();
 
-        assert_eq!(cpu.bus.read(0x20), 0x10);
+        assert_eq!(bus.read(0x20), 0x10);
 
         // LDA #$1
         cpu.step();
@@ -2680,11 +2688,11 @@ mod tests {
 
         // STA $21
         cpu.step();
-        assert_eq!(cpu.bus.read(0x21), 0x11);
+        assert_eq!(bus.read(0x21), 0x11);
 
         // INC $21
         cpu.step();
-        assert_eq!(cpu.bus.read(0x21), 0x12);
+        assert_eq!(bus.read(0x21), 0x12);
 
         // LDY $21
         cpu.step();
@@ -2723,7 +2731,9 @@ mod tests {
         ram[0x01] = 20;
         ram[0x10..0x10 + program.len()].copy_from_slice(&program);
 
-        let mut cpu = CPU::new(0x10, Box::new(ram));
+        let bus = Rc::new(RefCell::new(ram));
+
+        let mut cpu = CPU::new(0x10, bus);
 
         cpu.run_until_brk();
 

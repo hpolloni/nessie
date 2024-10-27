@@ -1,5 +1,5 @@
 use core::str;
-use std::{fs::File, io::Read};
+use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
 
 use nessie::{bus::Bus, cpu::CPU};
 
@@ -78,20 +78,21 @@ fn run_instr_test_rom(rom: &str) -> Result<(), Box<dyn std::error::Error>> {
     let prg_rom_end = prg_rom_start + buffer[4] as usize * 16384;
 
     let bus = NesBus::new(buffer[prg_rom_start..prg_rom_end].to_vec());
+    let bus = Rc::new(RefCell::new(bus));
 
     let pc = bus.read16(0xFFFC);
 
-    let mut cpu = CPU::new(pc, Box::new(bus));
+    let mut cpu = CPU::new(pc, bus.clone());
 
     let mut test_is_running = false;
     // Make sure that the test is running
     for _ in 0..100000 {
         cpu.step();
 
-        if cpu.bus.read(0x6000) == 0x80
-            && cpu.bus.read(0x6001) == 0xDE
-            && cpu.bus.read(0x6002) == 0xB0
-            && cpu.bus.read(0x6003) == 0x61
+        if bus.read(0x6000) == 0x80
+            && bus.read(0x6001) == 0xDE
+            && bus.read(0x6002) == 0xB0
+            && bus.read(0x6003) == 0x61
         {
             test_is_running = true;
             break;
@@ -100,17 +101,17 @@ fn run_instr_test_rom(rom: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     assert!(test_is_running, "Test is not running after 100,000 steps");
 
-    while cpu.bus.read(0x6000) == 0x80 {
+    while bus.read(0x6000) == 0x80 {
         cpu.step();
     }
 
-    assert_eq!(0x00, cpu.bus.read(0x6000));
+    assert_eq!(0x00, bus.read(0x6000));
 
     // TODO: this should be in the Bus trait
     let mut status = vec![];
     let mut idx = 0;
-    while cpu.bus.read(0x6004 + idx) != 0 {
-        status.push(cpu.bus.read(0x6004 + idx));
+    while bus.read(0x6004 + idx) != 0 {
+        status.push(bus.read(0x6004 + idx));
         idx += 1;
     }
     println!("{}", str::from_utf8(&status)?);
