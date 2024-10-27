@@ -12,31 +12,47 @@ enum Address {
 }
 
 #[derive(Debug, Copy, Clone)]
+enum AddressingMode {
+    Absolute,
+    AbsoluteX,
+    AbsoluteY,
+    Implied,
+    Immediate,
+    ZeroPage,
+    ZeroPageX,
+    ZeroPageY,
+    Relative,
+    IndirectX,
+    IndirectY,
+    Indirect,
+}
+
+#[derive(Debug, Copy, Clone)]
 struct OpCode {
     execute: fn(&mut CPU, Address),
     addressing: fn(&CPU) -> Address,
     name: &'static str,
-    addr_name: &'static str,
+    addressing_mode: AddressingMode,
     cycles: u8,
 }
 
 impl OpCode {
     fn len(&self) -> u16 {
-        // TODO: Make this an enum instead
-        match self.addr_name {
-            "ABS" => 3,
-            "ABY" => 3,
-            "ABX" => 3,
-            "IMP" => 1,
-            "IMM" => 2,
-            "ZP" => 2,
-            "ZPX" => 2,
-            "ZPY" => 2,
-            "REL" => 2,
-            "IZX" => 2,
-            "IZY" => 2,
-            "IND" => 3,
-            x => panic!("Invalid addressing mode {}", x),
+        match self.addressing_mode {
+            AddressingMode::Absolute
+            | AddressingMode::AbsoluteY
+            | AddressingMode::AbsoluteX
+            | AddressingMode::Indirect => 3,
+
+            AddressingMode::Immediate
+            | AddressingMode::ZeroPage
+            | AddressingMode::ZeroPageX
+            | AddressingMode::Relative
+            | AddressingMode::IndirectX
+            | AddressingMode::IndirectY
+            | AddressingMode::ZeroPageY => 2,
+
+            AddressingMode::Implied => 1,
         }
     }
 }
@@ -48,7 +64,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::brk,
         addressing: CPU::implied,
         name: "BRK",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 7,
     },
     // Opcode: 0x01
@@ -56,7 +72,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ora,
         addressing: CPU::indirect_x,
         name: "ORA",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0x01
@@ -64,7 +80,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ora,
         addressing: CPU::indirect_x,
         name: "ORA",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0x03
@@ -72,7 +88,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::slo,
         addressing: CPU::indirect_x,
         name: "SLO",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 8,
     },
     // Opcode: 0x04
@@ -80,7 +96,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::zero_page,
         name: "NOP",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0x05
@@ -88,7 +104,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ora,
         addressing: CPU::zero_page,
         name: "ORA",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0x06
@@ -96,7 +112,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::asl,
         addressing: CPU::zero_page,
         name: "ASL",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 5,
     },
     // Opcode: 0x07
@@ -104,7 +120,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::slo,
         addressing: CPU::zero_page,
         name: "SLO",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 5,
     },
     // Opcode: 0x08
@@ -112,7 +128,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::php,
         addressing: CPU::implied,
         name: "PHP",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 3,
     },
     // Opcode: 0x09
@@ -120,7 +136,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ora,
         addressing: CPU::immediate,
         name: "ORA",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0x0A
@@ -128,7 +144,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::asl,
         addressing: CPU::implied,
         name: "ASL",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x0B
@@ -136,7 +152,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::anc,
         addressing: CPU::immediate,
         name: "ANC",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0x0C
@@ -144,7 +160,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::absolute,
         name: "NOP",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0x0D
@@ -152,7 +168,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ora,
         addressing: CPU::absolute,
         name: "ORA",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0x0E
@@ -160,7 +176,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::asl,
         addressing: CPU::absolute,
         name: "ASL",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 6,
     },
     // Opcode: 0x0F
@@ -168,7 +184,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::slo,
         addressing: CPU::absolute,
         name: "SLO",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 6,
     },
     // Opcode: 0x10
@@ -176,7 +192,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::bpl,
         addressing: CPU::relative,
         name: "BPL",
-        addr_name: "REL",
+        addressing_mode: AddressingMode::Relative,
         cycles: 2,
     },
     // Opcode: 0x11
@@ -184,7 +200,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ora,
         addressing: CPU::indirect_y,
         name: "ORA",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0x11
@@ -192,7 +208,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ora,
         addressing: CPU::indirect_y,
         name: "ORA",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0x13
@@ -200,7 +216,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::slo,
         addressing: CPU::indirect_y,
         name: "SLO",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 8,
     },
     // Opcode: 0x14
@@ -208,7 +224,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::zero_page_x,
         name: "NOP",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0x15
@@ -216,7 +232,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ora,
         addressing: CPU::zero_page_x,
         name: "ORA",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0x16
@@ -224,7 +240,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::asl,
         addressing: CPU::zero_page_x,
         name: "ASL",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 6,
     },
     // Opcode: 0x17
@@ -232,7 +248,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::slo,
         addressing: CPU::zero_page_x,
         name: "SLO",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 6,
     },
     // Opcode: 0x18
@@ -240,7 +256,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::clc,
         addressing: CPU::implied,
         name: "CLC",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x19
@@ -248,7 +264,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ora,
         addressing: CPU::absolute_y,
         name: "ORA",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 4,
     },
     // Opcode: 0x1A
@@ -256,7 +272,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::implied,
         name: "NOP",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x1B
@@ -264,7 +280,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::slo,
         addressing: CPU::absolute_y,
         name: "SLO",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 7,
     },
     // Opcode: 0x1C
@@ -272,7 +288,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::absolute_x,
         name: "NOP",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0x1D
@@ -280,7 +296,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ora,
         addressing: CPU::absolute_x,
         name: "ORA",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0x1E
@@ -288,7 +304,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::asl,
         addressing: CPU::absolute_x,
         name: "ASL",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 7,
     },
     // Opcode: 0x1F
@@ -296,7 +312,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::slo,
         addressing: CPU::absolute_x,
         name: "SLO",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 7,
     },
     // Opcode: 0x20
@@ -304,7 +320,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::jsr,
         addressing: CPU::absolute,
         name: "JSR",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 6,
     },
     // Opcode: 0x21
@@ -312,7 +328,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::and,
         addressing: CPU::indirect_x,
         name: "AND",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0x21
@@ -320,7 +336,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::and,
         addressing: CPU::indirect_x,
         name: "AND",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0x23
@@ -328,7 +344,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rla,
         addressing: CPU::indirect_x,
         name: "RLA",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 8,
     },
     // Opcode: 0x24
@@ -336,7 +352,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::bit,
         addressing: CPU::zero_page,
         name: "BIT",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0x25
@@ -344,7 +360,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::and,
         addressing: CPU::zero_page,
         name: "AND",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0x26
@@ -352,7 +368,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rol,
         addressing: CPU::zero_page,
         name: "ROL",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 5,
     },
     // Opcode: 0x27
@@ -360,7 +376,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rla,
         addressing: CPU::zero_page,
         name: "RLA",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 5,
     },
     // Opcode: 0x28
@@ -368,7 +384,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::plp,
         addressing: CPU::implied,
         name: "PLP",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 4,
     },
     // Opcode: 0x29
@@ -376,7 +392,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::and,
         addressing: CPU::immediate,
         name: "AND",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0x2A
@@ -384,7 +400,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rol,
         addressing: CPU::implied,
         name: "ROL",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x2B
@@ -392,7 +408,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::anc,
         addressing: CPU::immediate,
         name: "ANC",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0x2C
@@ -400,7 +416,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::bit,
         addressing: CPU::absolute,
         name: "BIT",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0x2D
@@ -408,7 +424,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::and,
         addressing: CPU::absolute,
         name: "AND",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0x2E
@@ -416,7 +432,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rol,
         addressing: CPU::absolute,
         name: "ROL",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 6,
     },
     // Opcode: 0x2F
@@ -424,7 +440,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rla,
         addressing: CPU::absolute,
         name: "RLA",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 6,
     },
     // Opcode: 0x30
@@ -432,7 +448,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::bmi,
         addressing: CPU::relative,
         name: "BMI",
-        addr_name: "REL",
+        addressing_mode: AddressingMode::Relative,
         cycles: 2,
     },
     // Opcode: 0x31
@@ -440,7 +456,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::and,
         addressing: CPU::indirect_y,
         name: "AND",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0x31
@@ -448,7 +464,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::and,
         addressing: CPU::indirect_y,
         name: "AND",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0x33
@@ -456,7 +472,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rla,
         addressing: CPU::indirect_y,
         name: "RLA",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 8,
     },
     // Opcode: 0x34
@@ -464,7 +480,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::zero_page_x,
         name: "NOP",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0x35
@@ -472,7 +488,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::and,
         addressing: CPU::zero_page_x,
         name: "AND",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0x36
@@ -480,7 +496,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rol,
         addressing: CPU::zero_page_x,
         name: "ROL",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 6,
     },
     // Opcode: 0x37
@@ -488,7 +504,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rla,
         addressing: CPU::zero_page_x,
         name: "RLA",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 6,
     },
     // Opcode: 0x38
@@ -496,7 +512,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sec,
         addressing: CPU::implied,
         name: "SEC",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x39
@@ -504,7 +520,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::and,
         addressing: CPU::absolute_y,
         name: "AND",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 4,
     },
     // Opcode: 0x3A
@@ -512,7 +528,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::implied,
         name: "NOP",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x3B
@@ -520,7 +536,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rla,
         addressing: CPU::absolute_y,
         name: "RLA",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 7,
     },
     // Opcode: 0x3C
@@ -528,7 +544,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::absolute_x,
         name: "NOP",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0x3D
@@ -536,7 +552,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::and,
         addressing: CPU::absolute_x,
         name: "AND",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0x3E
@@ -544,7 +560,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rol,
         addressing: CPU::absolute_x,
         name: "ROL",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 7,
     },
     // Opcode: 0x3F
@@ -552,7 +568,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rla,
         addressing: CPU::absolute_x,
         name: "RLA",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 7,
     },
     // Opcode: 0x40
@@ -560,7 +576,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rti,
         addressing: CPU::implied,
         name: "RTI",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 6,
     },
     // Opcode: 0x41
@@ -568,7 +584,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::eor,
         addressing: CPU::indirect_x,
         name: "EOR",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0x41
@@ -576,7 +592,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::eor,
         addressing: CPU::indirect_x,
         name: "EOR",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0x43
@@ -584,7 +600,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sre,
         addressing: CPU::indirect_x,
         name: "SRE",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 8,
     },
     // Opcode: 0x44
@@ -592,7 +608,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::zero_page,
         name: "NOP",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0x45
@@ -600,7 +616,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::eor,
         addressing: CPU::zero_page,
         name: "EOR",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0x46
@@ -608,7 +624,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lsr,
         addressing: CPU::zero_page,
         name: "LSR",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 5,
     },
     // Opcode: 0x47
@@ -616,7 +632,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sre,
         addressing: CPU::zero_page,
         name: "SRE",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 5,
     },
     // Opcode: 0x48
@@ -624,7 +640,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::pha,
         addressing: CPU::implied,
         name: "PHA",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 3,
     },
     // Opcode: 0x49
@@ -632,7 +648,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::eor,
         addressing: CPU::immediate,
         name: "EOR",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0x4A
@@ -640,7 +656,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lsr,
         addressing: CPU::implied,
         name: "LSR",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x4B
@@ -648,7 +664,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::alr,
         addressing: CPU::immediate,
         name: "ALR",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0x4C
@@ -656,7 +672,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::jmp,
         addressing: CPU::absolute,
         name: "JMP",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 3,
     },
     // Opcode: 0x4D
@@ -664,7 +680,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::eor,
         addressing: CPU::absolute,
         name: "EOR",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0x4E
@@ -672,7 +688,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lsr,
         addressing: CPU::absolute,
         name: "LSR",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 6,
     },
     // Opcode: 0x4F
@@ -680,7 +696,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sre,
         addressing: CPU::absolute,
         name: "SRE",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 6,
     },
     // Opcode: 0x50
@@ -688,7 +704,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::bvc,
         addressing: CPU::relative,
         name: "BVC",
-        addr_name: "REL",
+        addressing_mode: AddressingMode::Relative,
         cycles: 2,
     },
     // Opcode: 0x51
@@ -696,7 +712,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::eor,
         addressing: CPU::indirect_y,
         name: "EOR",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0x51
@@ -704,7 +720,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::eor,
         addressing: CPU::indirect_y,
         name: "EOR",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0x53
@@ -712,7 +728,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sre,
         addressing: CPU::indirect_y,
         name: "SRE",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 8,
     },
     // Opcode: 0x54
@@ -720,7 +736,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::zero_page_x,
         name: "NOP",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0x55
@@ -728,7 +744,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::eor,
         addressing: CPU::zero_page_x,
         name: "EOR",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0x56
@@ -736,7 +752,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lsr,
         addressing: CPU::zero_page_x,
         name: "LSR",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 6,
     },
     // Opcode: 0x57
@@ -744,7 +760,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sre,
         addressing: CPU::zero_page_x,
         name: "SRE",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 6,
     },
     // Opcode: 0x58
@@ -752,7 +768,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cli,
         addressing: CPU::implied,
         name: "CLI",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x59
@@ -760,7 +776,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::eor,
         addressing: CPU::absolute_y,
         name: "EOR",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 4,
     },
     // Opcode: 0x5A
@@ -768,7 +784,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::implied,
         name: "NOP",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x5B
@@ -776,7 +792,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sre,
         addressing: CPU::absolute_y,
         name: "SRE",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 7,
     },
     // Opcode: 0x5C
@@ -784,7 +800,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::absolute_x,
         name: "NOP",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0x5D
@@ -792,7 +808,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::eor,
         addressing: CPU::absolute_x,
         name: "EOR",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0x5E
@@ -800,7 +816,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lsr,
         addressing: CPU::absolute_x,
         name: "LSR",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 7,
     },
     // Opcode: 0x5F
@@ -808,7 +824,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sre,
         addressing: CPU::absolute_x,
         name: "SRE",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 7,
     },
     // Opcode: 0x60
@@ -816,7 +832,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rts,
         addressing: CPU::implied,
         name: "RTS",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 6,
     },
     // Opcode: 0x61
@@ -824,7 +840,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::adc,
         addressing: CPU::indirect_x,
         name: "ADC",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0x61
@@ -832,7 +848,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::adc,
         addressing: CPU::indirect_x,
         name: "ADC",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0x63
@@ -840,7 +856,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rra,
         addressing: CPU::indirect_x,
         name: "RRA",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 8,
     },
     // Opcode: 0x64
@@ -848,7 +864,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::zero_page,
         name: "NOP",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0x65
@@ -856,7 +872,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::adc,
         addressing: CPU::zero_page,
         name: "ADC",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0x66
@@ -864,7 +880,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ror,
         addressing: CPU::zero_page,
         name: "ROR",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 5,
     },
     // Opcode: 0x67
@@ -872,7 +888,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rra,
         addressing: CPU::zero_page,
         name: "RRA",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 5,
     },
     // Opcode: 0x68
@@ -880,7 +896,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::pla,
         addressing: CPU::implied,
         name: "PLA",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 4,
     },
     // Opcode: 0x69
@@ -888,7 +904,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::adc,
         addressing: CPU::immediate,
         name: "ADC",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0x6A
@@ -896,7 +912,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ror,
         addressing: CPU::implied,
         name: "ROR",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x6B
@@ -904,7 +920,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::arr,
         addressing: CPU::immediate,
         name: "ARR",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0x6C
@@ -912,7 +928,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::jmp,
         addressing: CPU::indirect,
         name: "JMP",
-        addr_name: "IND",
+        addressing_mode: AddressingMode::Indirect,
         cycles: 5,
     },
     // Opcode: 0x6D
@@ -920,7 +936,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::adc,
         addressing: CPU::absolute,
         name: "ADC",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0x6E
@@ -928,7 +944,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ror,
         addressing: CPU::absolute,
         name: "ROR",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 6,
     },
     // Opcode: 0x6F
@@ -936,7 +952,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rra,
         addressing: CPU::absolute,
         name: "RRA",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 6,
     },
     // Opcode: 0x70
@@ -944,7 +960,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::bvs,
         addressing: CPU::relative,
         name: "BVS",
-        addr_name: "REL",
+        addressing_mode: AddressingMode::Relative,
         cycles: 2,
     },
     // Opcode: 0x71
@@ -952,7 +968,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::adc,
         addressing: CPU::indirect_y,
         name: "ADC",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0x71
@@ -960,7 +976,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::adc,
         addressing: CPU::indirect_y,
         name: "ADC",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0x73
@@ -968,7 +984,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rra,
         addressing: CPU::indirect_y,
         name: "RRA",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 8,
     },
     // Opcode: 0x74
@@ -976,7 +992,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::zero_page_x,
         name: "NOP",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0x75
@@ -984,7 +1000,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::adc,
         addressing: CPU::zero_page_x,
         name: "ADC",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0x76
@@ -992,7 +1008,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ror,
         addressing: CPU::zero_page_x,
         name: "ROR",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 6,
     },
     // Opcode: 0x77
@@ -1000,7 +1016,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rra,
         addressing: CPU::zero_page_x,
         name: "RRA",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 6,
     },
     // Opcode: 0x78
@@ -1008,7 +1024,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sei,
         addressing: CPU::implied,
         name: "SEI",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x79
@@ -1016,7 +1032,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::adc,
         addressing: CPU::absolute_y,
         name: "ADC",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 4,
     },
     // Opcode: 0x7A
@@ -1024,7 +1040,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::implied,
         name: "NOP",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x7B
@@ -1032,7 +1048,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rra,
         addressing: CPU::absolute_y,
         name: "RRA",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 7,
     },
     // Opcode: 0x7C
@@ -1040,7 +1056,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::absolute_x,
         name: "NOP",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0x7D
@@ -1048,7 +1064,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::adc,
         addressing: CPU::absolute_x,
         name: "ADC",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0x7E
@@ -1056,7 +1072,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ror,
         addressing: CPU::absolute_x,
         name: "ROR",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 7,
     },
     // Opcode: 0x7F
@@ -1064,7 +1080,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::rra,
         addressing: CPU::absolute_x,
         name: "RRA",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 7,
     },
     // Opcode: 0x80
@@ -1072,7 +1088,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::immediate,
         name: "NOP",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0x81
@@ -1080,7 +1096,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sta,
         addressing: CPU::indirect_x,
         name: "STA",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0x82
@@ -1088,7 +1104,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::immediate,
         name: "NOP",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0x83
@@ -1096,7 +1112,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sax,
         addressing: CPU::indirect_x,
         name: "SAX",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0x84
@@ -1104,7 +1120,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sty,
         addressing: CPU::zero_page,
         name: "STY",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0x85
@@ -1112,7 +1128,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sta,
         addressing: CPU::zero_page,
         name: "STA",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0x86
@@ -1120,7 +1136,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::stx,
         addressing: CPU::zero_page,
         name: "STX",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0x87
@@ -1128,7 +1144,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sax,
         addressing: CPU::zero_page,
         name: "SAX",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0x88
@@ -1136,7 +1152,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::dey,
         addressing: CPU::implied,
         name: "DEY",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x89
@@ -1144,7 +1160,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::immediate,
         name: "NOP",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0x8A
@@ -1152,7 +1168,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::txa,
         addressing: CPU::implied,
         name: "TXA",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x8B
@@ -1160,7 +1176,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::xaa,
         addressing: CPU::immediate,
         name: "XAA",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0x8C
@@ -1168,7 +1184,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sty,
         addressing: CPU::absolute,
         name: "STY",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0x8D
@@ -1176,7 +1192,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sta,
         addressing: CPU::absolute,
         name: "STA",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0x8E
@@ -1184,7 +1200,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::stx,
         addressing: CPU::absolute,
         name: "STX",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0x8F
@@ -1192,7 +1208,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sax,
         addressing: CPU::absolute,
         name: "SAX",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0x90
@@ -1200,7 +1216,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::bcc,
         addressing: CPU::relative,
         name: "BCC",
-        addr_name: "REL",
+        addressing_mode: AddressingMode::Relative,
         cycles: 2,
     },
     // Opcode: 0x91
@@ -1208,7 +1224,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sta,
         addressing: CPU::indirect_y,
         name: "STA",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 6,
     },
     // Opcode: 0x91
@@ -1216,7 +1232,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sta,
         addressing: CPU::indirect_y,
         name: "STA",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 6,
     },
     // Opcode: 0x93
@@ -1224,7 +1240,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ahx,
         addressing: CPU::indirect_y,
         name: "AHX",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 6,
     },
     // Opcode: 0x94
@@ -1232,7 +1248,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sty,
         addressing: CPU::zero_page_x,
         name: "STY",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0x95
@@ -1240,7 +1256,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sta,
         addressing: CPU::zero_page_x,
         name: "STA",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0x96
@@ -1248,7 +1264,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::stx,
         addressing: CPU::zero_page_y,
         name: "STX",
-        addr_name: "ZPY",
+        addressing_mode: AddressingMode::ZeroPageY,
         cycles: 4,
     },
     // Opcode: 0x97
@@ -1256,7 +1272,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sax,
         addressing: CPU::zero_page_y,
         name: "SAX",
-        addr_name: "ZPY",
+        addressing_mode: AddressingMode::ZeroPageY,
         cycles: 4,
     },
     // Opcode: 0x98
@@ -1264,7 +1280,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::tya,
         addressing: CPU::implied,
         name: "TYA",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x99
@@ -1272,7 +1288,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sta,
         addressing: CPU::absolute_y,
         name: "STA",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 5,
     },
     // Opcode: 0x9A
@@ -1280,7 +1296,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::txs,
         addressing: CPU::implied,
         name: "TXS",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0x9B
@@ -1288,7 +1304,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::tas,
         addressing: CPU::absolute_y,
         name: "TAS",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 5,
     },
     // Opcode: 0x9C
@@ -1296,7 +1312,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::shy,
         addressing: CPU::absolute_x,
         name: "SHY",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 5,
     },
     // Opcode: 0x9D
@@ -1304,7 +1320,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sta,
         addressing: CPU::absolute_x,
         name: "STA",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 5,
     },
     // Opcode: 0x9E
@@ -1312,7 +1328,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::shx,
         addressing: CPU::absolute_y,
         name: "SHX",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 5,
     },
     // Opcode: 0x9F
@@ -1320,7 +1336,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ahx,
         addressing: CPU::absolute_y,
         name: "AHX",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 5,
     },
     // Opcode: 0xA0
@@ -1328,7 +1344,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ldy,
         addressing: CPU::immediate,
         name: "LDY",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0xA1
@@ -1336,7 +1352,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lda,
         addressing: CPU::indirect_x,
         name: "LDA",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0xA2
@@ -1344,7 +1360,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ldx,
         addressing: CPU::immediate,
         name: "LDX",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0xA3
@@ -1352,7 +1368,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lax,
         addressing: CPU::indirect_x,
         name: "LAX",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0xA4
@@ -1360,7 +1376,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ldy,
         addressing: CPU::zero_page,
         name: "LDY",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0xA5
@@ -1368,7 +1384,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lda,
         addressing: CPU::zero_page,
         name: "LDA",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0xA6
@@ -1376,7 +1392,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ldx,
         addressing: CPU::zero_page,
         name: "LDX",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0xA7
@@ -1384,7 +1400,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lax,
         addressing: CPU::zero_page,
         name: "LAX",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0xA8
@@ -1392,7 +1408,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::tay,
         addressing: CPU::implied,
         name: "TAY",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0xA9
@@ -1400,7 +1416,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lda,
         addressing: CPU::immediate,
         name: "LDA",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0xAA
@@ -1408,7 +1424,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::tax,
         addressing: CPU::implied,
         name: "TAX",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0xAB
@@ -1416,7 +1432,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lax,
         addressing: CPU::immediate,
         name: "LAX",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0xAC
@@ -1424,7 +1440,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ldy,
         addressing: CPU::absolute,
         name: "LDY",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0xAD
@@ -1432,7 +1448,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lda,
         addressing: CPU::absolute,
         name: "LDA",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0xAE
@@ -1440,7 +1456,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ldx,
         addressing: CPU::absolute,
         name: "LDX",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0xAF
@@ -1448,7 +1464,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lax,
         addressing: CPU::absolute,
         name: "LAX",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0xB0
@@ -1456,7 +1472,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::bcs,
         addressing: CPU::relative,
         name: "BCS",
-        addr_name: "REL",
+        addressing_mode: AddressingMode::Relative,
         cycles: 2,
     },
     // Opcode: 0xB1
@@ -1464,7 +1480,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lda,
         addressing: CPU::indirect_y,
         name: "LDA",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0xB1
@@ -1472,7 +1488,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lda,
         addressing: CPU::indirect_y,
         name: "LDA",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0xB3
@@ -1480,7 +1496,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lax,
         addressing: CPU::indirect_y,
         name: "LAX",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0xB4
@@ -1488,7 +1504,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ldy,
         addressing: CPU::zero_page_x,
         name: "LDY",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0xB5
@@ -1496,7 +1512,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lda,
         addressing: CPU::zero_page_x,
         name: "LDA",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0xB6
@@ -1504,7 +1520,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ldx,
         addressing: CPU::zero_page_y,
         name: "LDX",
-        addr_name: "ZPY",
+        addressing_mode: AddressingMode::ZeroPageY,
         cycles: 4,
     },
     // Opcode: 0xB7
@@ -1512,7 +1528,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lax,
         addressing: CPU::zero_page_y,
         name: "LAX",
-        addr_name: "ZPY",
+        addressing_mode: AddressingMode::ZeroPageY,
         cycles: 4,
     },
     // Opcode: 0xB8
@@ -1520,7 +1536,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::clv,
         addressing: CPU::implied,
         name: "CLV",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0xB9
@@ -1528,7 +1544,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lda,
         addressing: CPU::absolute_y,
         name: "LDA",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 4,
     },
     // Opcode: 0xBA
@@ -1536,7 +1552,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::tsx,
         addressing: CPU::implied,
         name: "TSX",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0xBB
@@ -1544,7 +1560,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::las,
         addressing: CPU::absolute_y,
         name: "LAS",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 4,
     },
     // Opcode: 0xBC
@@ -1552,7 +1568,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ldy,
         addressing: CPU::absolute_x,
         name: "LDY",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0xBD
@@ -1560,7 +1576,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lda,
         addressing: CPU::absolute_x,
         name: "LDA",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0xBE
@@ -1568,7 +1584,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::ldx,
         addressing: CPU::absolute_y,
         name: "LDX",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 4,
     },
     // Opcode: 0xBF
@@ -1576,7 +1592,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::lax,
         addressing: CPU::absolute_y,
         name: "LAX",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 4,
     },
     // Opcode: 0xC0
@@ -1584,7 +1600,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cpy,
         addressing: CPU::immediate,
         name: "CPY",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0xC1
@@ -1592,7 +1608,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cmp,
         addressing: CPU::indirect_x,
         name: "CMP",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0xC2
@@ -1600,7 +1616,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::immediate,
         name: "NOP",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0xC3
@@ -1608,7 +1624,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::dcp,
         addressing: CPU::indirect_x,
         name: "DCP",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 8,
     },
     // Opcode: 0xC4
@@ -1616,7 +1632,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cpy,
         addressing: CPU::zero_page,
         name: "CPY",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0xC5
@@ -1624,7 +1640,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cmp,
         addressing: CPU::zero_page,
         name: "CMP",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0xC6
@@ -1632,7 +1648,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::dec,
         addressing: CPU::zero_page,
         name: "DEC",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 5,
     },
     // Opcode: 0xC7
@@ -1640,7 +1656,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::dcp,
         addressing: CPU::zero_page,
         name: "DCP",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 5,
     },
     // Opcode: 0xC8
@@ -1648,7 +1664,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::iny,
         addressing: CPU::implied,
         name: "INY",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0xC9
@@ -1656,7 +1672,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cmp,
         addressing: CPU::immediate,
         name: "CMP",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0xCA
@@ -1664,7 +1680,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::dex,
         addressing: CPU::implied,
         name: "DEX",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0xCB
@@ -1672,7 +1688,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::axs,
         addressing: CPU::immediate,
         name: "AXS",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0xCC
@@ -1680,7 +1696,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cpy,
         addressing: CPU::absolute,
         name: "CPY",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0xCD
@@ -1688,7 +1704,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cmp,
         addressing: CPU::absolute,
         name: "CMP",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0xCE
@@ -1696,7 +1712,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::dec,
         addressing: CPU::absolute,
         name: "DEC",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 6,
     },
     // Opcode: 0xCF
@@ -1704,7 +1720,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::dcp,
         addressing: CPU::absolute,
         name: "DCP",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 6,
     },
     // Opcode: 0xD0
@@ -1712,7 +1728,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::bne,
         addressing: CPU::relative,
         name: "BNE",
-        addr_name: "REL",
+        addressing_mode: AddressingMode::Relative,
         cycles: 2,
     },
     // Opcode: 0xD1
@@ -1720,7 +1736,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cmp,
         addressing: CPU::indirect_y,
         name: "CMP",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0xD1
@@ -1728,7 +1744,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cmp,
         addressing: CPU::indirect_y,
         name: "CMP",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0xD3
@@ -1736,7 +1752,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::dcp,
         addressing: CPU::indirect_y,
         name: "DCP",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 8,
     },
     // Opcode: 0xD4
@@ -1744,7 +1760,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::zero_page_x,
         name: "NOP",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0xD5
@@ -1752,7 +1768,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cmp,
         addressing: CPU::zero_page_x,
         name: "CMP",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0xD6
@@ -1760,7 +1776,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::dec,
         addressing: CPU::zero_page_x,
         name: "DEC",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 6,
     },
     // Opcode: 0xD7
@@ -1768,7 +1784,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::dcp,
         addressing: CPU::zero_page_x,
         name: "DCP",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 6,
     },
     // Opcode: 0xD8
@@ -1776,7 +1792,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cld,
         addressing: CPU::implied,
         name: "CLD",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0xD9
@@ -1784,7 +1800,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cmp,
         addressing: CPU::absolute_y,
         name: "CMP",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 4,
     },
     // Opcode: 0xDA
@@ -1792,7 +1808,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::implied,
         name: "NOP",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0xDB
@@ -1800,7 +1816,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::dcp,
         addressing: CPU::absolute_y,
         name: "DCP",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 7,
     },
     // Opcode: 0xDC
@@ -1808,7 +1824,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::absolute_x,
         name: "NOP",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0xDD
@@ -1816,7 +1832,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cmp,
         addressing: CPU::absolute_x,
         name: "CMP",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0xDE
@@ -1824,7 +1840,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::dec,
         addressing: CPU::absolute_x,
         name: "DEC",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 7,
     },
     // Opcode: 0xDF
@@ -1832,7 +1848,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::dcp,
         addressing: CPU::absolute_x,
         name: "DCP",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 7,
     },
     // Opcode: 0xE0
@@ -1840,7 +1856,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cpx,
         addressing: CPU::immediate,
         name: "CPX",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0xE1
@@ -1848,7 +1864,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sbc,
         addressing: CPU::indirect_x,
         name: "SBC",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 6,
     },
     // Opcode: 0xE2
@@ -1856,7 +1872,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::immediate,
         name: "NOP",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0xE3
@@ -1864,7 +1880,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::isc,
         addressing: CPU::indirect_x,
         name: "ISC",
-        addr_name: "IZX",
+        addressing_mode: AddressingMode::IndirectX,
         cycles: 8,
     },
     // Opcode: 0xE4
@@ -1872,7 +1888,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cpx,
         addressing: CPU::zero_page,
         name: "CPX",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0xE5
@@ -1880,7 +1896,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sbc,
         addressing: CPU::zero_page,
         name: "SBC",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 3,
     },
     // Opcode: 0xE6
@@ -1888,7 +1904,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::inc,
         addressing: CPU::zero_page,
         name: "INC",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 5,
     },
     // Opcode: 0xE7
@@ -1896,7 +1912,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::isc,
         addressing: CPU::zero_page,
         name: "ISC",
-        addr_name: "ZP",
+        addressing_mode: AddressingMode::ZeroPage,
         cycles: 5,
     },
     // Opcode: 0xE8
@@ -1904,7 +1920,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::inx,
         addressing: CPU::implied,
         name: "INX",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0xE9
@@ -1912,7 +1928,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sbc,
         addressing: CPU::immediate,
         name: "SBC",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0xEA
@@ -1920,7 +1936,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::implied,
         name: "NOP",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0xEB
@@ -1928,7 +1944,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sbc,
         addressing: CPU::immediate,
         name: "SBC",
-        addr_name: "IMM",
+        addressing_mode: AddressingMode::Immediate,
         cycles: 2,
     },
     // Opcode: 0xEC
@@ -1936,7 +1952,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::cpx,
         addressing: CPU::absolute,
         name: "CPX",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0xED
@@ -1944,7 +1960,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sbc,
         addressing: CPU::absolute,
         name: "SBC",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 4,
     },
     // Opcode: 0xEE
@@ -1952,7 +1968,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::inc,
         addressing: CPU::absolute,
         name: "INC",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 6,
     },
     // Opcode: 0xEF
@@ -1960,7 +1976,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::isc,
         addressing: CPU::absolute,
         name: "ISC",
-        addr_name: "ABS",
+        addressing_mode: AddressingMode::Absolute,
         cycles: 6,
     },
     // Opcode: 0xF0
@@ -1968,7 +1984,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::beq,
         addressing: CPU::relative,
         name: "BEQ",
-        addr_name: "REL",
+        addressing_mode: AddressingMode::Relative,
         cycles: 2,
     },
     // Opcode: 0xF1
@@ -1976,7 +1992,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sbc,
         addressing: CPU::indirect_y,
         name: "SBC",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0xF1
@@ -1984,7 +2000,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sbc,
         addressing: CPU::indirect_y,
         name: "SBC",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 5,
     },
     // Opcode: 0xF3
@@ -1992,7 +2008,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::isc,
         addressing: CPU::indirect_y,
         name: "ISC",
-        addr_name: "IZY",
+        addressing_mode: AddressingMode::IndirectY,
         cycles: 8,
     },
     // Opcode: 0xF4
@@ -2000,7 +2016,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::zero_page_x,
         name: "NOP",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0xF5
@@ -2008,7 +2024,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sbc,
         addressing: CPU::zero_page_x,
         name: "SBC",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 4,
     },
     // Opcode: 0xF6
@@ -2016,7 +2032,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::inc,
         addressing: CPU::zero_page_x,
         name: "INC",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 6,
     },
     // Opcode: 0xF7
@@ -2024,7 +2040,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::isc,
         addressing: CPU::zero_page_x,
         name: "ISC",
-        addr_name: "ZPX",
+        addressing_mode: AddressingMode::ZeroPageX,
         cycles: 6,
     },
     // Opcode: 0xF8
@@ -2032,7 +2048,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sed,
         addressing: CPU::implied,
         name: "SED",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0xF9
@@ -2040,7 +2056,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sbc,
         addressing: CPU::absolute_y,
         name: "SBC",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 4,
     },
     // Opcode: 0xFA
@@ -2048,7 +2064,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::implied,
         name: "NOP",
-        addr_name: "IMP",
+        addressing_mode: AddressingMode::Implied,
         cycles: 2,
     },
     // Opcode: 0xFB
@@ -2056,7 +2072,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::isc,
         addressing: CPU::absolute_y,
         name: "ISC",
-        addr_name: "ABY",
+        addressing_mode: AddressingMode::AbsoluteY,
         cycles: 7,
     },
     // Opcode: 0xFC
@@ -2064,7 +2080,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::nop,
         addressing: CPU::absolute_x,
         name: "NOP",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0xFD
@@ -2072,7 +2088,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::sbc,
         addressing: CPU::absolute_x,
         name: "SBC",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 4,
     },
     // Opcode: 0xFE
@@ -2080,7 +2096,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::inc,
         addressing: CPU::absolute_x,
         name: "INC",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 7,
     },
     // Opcode: 0xFF
@@ -2088,7 +2104,7 @@ static OPCODE_TABLE: [OpCode; 256] = [
         execute: CPU::isc,
         addressing: CPU::absolute_x,
         name: "ISC",
-        addr_name: "ABX",
+        addressing_mode: AddressingMode::AbsoluteX,
         cycles: 7,
     },
 ];
