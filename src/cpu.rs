@@ -136,7 +136,7 @@ const STACK_PAGE: u16 = 0x0100;
 // Operations
 impl CPU {
     pub(crate) fn adc(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address, page_cross) => {
             let value = self.bus.read(address);
             let carry = self.status.contains(StatusFlags::C) as u16;
             let result: u16 = u16::from(self.accumulator) + u16::from(value) + carry;
@@ -151,6 +151,10 @@ impl CPU {
                     > 0,
             );
             self.set_zero_or_neg_flags(result_u8);
+
+            if page_cross {
+                self.remaining_cycles += 1;
+            }
 
             self.accumulator = result_u8;
         });
@@ -171,10 +175,13 @@ impl CPU {
     }
 
     pub(crate) fn and(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address, page_cross) => {
             let value = self.bus.read(address);
             self.accumulator &= value;
             self.set_zero_or_neg_flags(self.accumulator);
+            if page_cross {
+                self.remaining_cycles += 1;
+            }
         });
     }
 
@@ -182,7 +189,6 @@ impl CPU {
         todo!("arr Not Implemented")
     }
 
-    // TODO: find a way to refactor asl, ror and lsr
     pub(crate) fn asl(&mut self, address: Address) {
         let mut inner = |value: u8| -> u8 {
             self.status.set(StatusFlags::C, value >> 7 == 1);
@@ -195,7 +201,7 @@ impl CPU {
 
         match address {
             Address::Implied => self.accumulator = inner(self.accumulator),
-            Address::Absolute(address) => {
+            Address::Absolute(address, _) => {
                 let value = inner(self.bus.read(address));
                 self.bus.write(address, value);
             }
@@ -213,7 +219,7 @@ impl CPU {
             let address = s8_to_u16(address).wrapping_add(self.program_counter);
 
             if cond {
-                if address & 0xff00 != self.program_counter & 0xff00 {
+                if address & 0xFF00 != self.program_counter & 0xFF00 {
                     self.remaining_cycles += 2;
                 } else {
                     self.remaining_cycles += 1;
@@ -236,7 +242,7 @@ impl CPU {
     }
 
     pub(crate) fn bit(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address, _) => {
             let value = self.bus.read(address);
             let mask = StatusFlags::from_bits_truncate(value);
 
@@ -297,13 +303,17 @@ impl CPU {
     }
 
     fn compare(&mut self, address: Address, register_value: u8) {
-        debug_assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address, page_cross) => {
             let value = self.bus.read(address);
 
             self.status.set(StatusFlags::C, register_value >= value);
 
             let cmp = register_value.wrapping_sub(value);
             self.set_zero_or_neg_flags(cmp);
+
+            if page_cross {
+                self.remaining_cycles += 1;
+            }
         });
     }
 
@@ -320,12 +330,14 @@ impl CPU {
     }
 
     pub(crate) fn dcp(&mut self, address: Address) {
-        self.dec(address);
-        self.cmp(address)
+        debug_assert_matches!(address, Address::Absolute(address, _) => {
+            self.dec(Address::Absolute(address, false));
+            self.cmp(Address::Absolute(address, false));
+        });
     }
 
     pub(crate) fn dec(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address, _) => {
             let value = self.bus.read(address).wrapping_sub(1);
             self.set_zero_or_neg_flags(value);
             self.bus.write(address, value);
@@ -347,15 +359,18 @@ impl CPU {
     }
 
     pub(crate) fn eor(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address, page_crossed) => {
             let value = self.bus.read(address);
             self.accumulator ^= value;
             self.set_zero_or_neg_flags(self.accumulator);
+            if page_crossed {
+                self.remaining_cycles += 1;
+            }
         });
     }
 
     pub(crate) fn inc(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address, _) => {
             let value = self.bus.read(address).wrapping_add(1);
             self.set_zero_or_neg_flags(value);
             self.bus.write(address, value);
@@ -377,16 +392,18 @@ impl CPU {
     }
 
     pub(crate) fn isc(&mut self, address: Address) {
-        self.inc(address);
-        self.sbc(address);
+        debug_assert_matches!(address, Address::Absolute(address, _) => {
+            self.inc(Address::Absolute(address, false));
+            self.sbc(Address::Absolute(address, false));
+        });
     }
 
     pub(crate) fn jmp(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => self.program_counter = address);
+        debug_assert_matches!(address, Address::Absolute(address, _) => self.program_counter = address);
     }
 
     pub(crate) fn jsr(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address, _) => {
             self.push_stack_16(self.program_counter - 1);
             self.program_counter = address;
         });
@@ -397,27 +414,43 @@ impl CPU {
     }
 
     pub(crate) fn lax(&mut self, address: Address) {
-        self.lda(address);
-        self.ldx(address);
+        // Prevent doble counting cycles
+        debug_assert_matches!(address, Address::Absolute(addr, page_crossed) => {
+            self.lda(Address::Absolute(addr, false));
+            self.ldx(Address::Absolute(addr, false));
+            if page_crossed {
+                self.remaining_cycles += 1;
+            }
+        });
     }
+
     pub(crate) fn lda(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address, page_crossed) => {
             self.accumulator = self.bus.read(address);
             self.set_zero_or_neg_flags(self.accumulator);
+            if page_crossed {
+                self.remaining_cycles += 1;
+            }
         });
     }
 
     pub(crate) fn ldx(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address, page_crossed) => {
             self.x_register = self.bus.read(address);
             self.set_zero_or_neg_flags(self.x_register);
+            if page_crossed {
+                self.remaining_cycles += 1;
+            }
         });
     }
 
     pub(crate) fn ldy(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address, page_crossed) => {
             self.y_register = self.bus.read(address);
             self.set_zero_or_neg_flags(self.y_register);
+            if page_crossed {
+                self.remaining_cycles += 1;
+            }
         });
     }
 
@@ -432,7 +465,7 @@ impl CPU {
 
         match address {
             Address::Implied => self.accumulator = inner(self.accumulator),
-            Address::Absolute(address) => {
+            Address::Absolute(address, _) => {
                 let value = inner(self.bus.read(address));
                 self.bus.write(address, value);
             }
@@ -440,15 +473,27 @@ impl CPU {
         }
     }
 
-    pub(crate) fn nop(&mut self, _address: Address) {
-        // Do nothing (NOP)
+    pub(crate) fn nop(&mut self, address: Address) {
+        match address {
+            Address::Absolute(_, page_crossed) => {
+                if page_crossed {
+                    self.remaining_cycles += 1;
+                }
+            }
+            _ => {
+                // Do nothing
+            }
+        }
     }
 
     pub(crate) fn ora(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address, page_crossed) => {
             let value = self.bus.read(address);
             self.accumulator |= value;
             self.set_zero_or_neg_flags(self.accumulator);
+            if page_crossed {
+                self.remaining_cycles += 1;
+            }
         });
     }
 
@@ -484,6 +529,11 @@ impl CPU {
     }
 
     pub(crate) fn rla(&mut self, address: Address) {
+        let address = match address {
+            Address::Absolute(address, _) => Address::Absolute(address, false),
+            a => a,
+        };
+
         self.rol(address);
         self.and(address);
     }
@@ -509,7 +559,7 @@ impl CPU {
 
         match address {
             Address::Implied => self.accumulator = inner(self.accumulator),
-            Address::Absolute(address) => {
+            Address::Absolute(address, _) => {
                 let value = inner(self.bus.read(address));
                 self.bus.write(address, value);
             }
@@ -538,7 +588,7 @@ impl CPU {
 
         match address {
             Address::Implied => self.accumulator = inner(self.accumulator),
-            Address::Absolute(address) => {
+            Address::Absolute(address, _) => {
                 let value = inner(self.bus.read(address));
                 self.bus.write(address, value);
             }
@@ -547,6 +597,11 @@ impl CPU {
     }
 
     pub(crate) fn rra(&mut self, address: Address) {
+        let address = match address {
+            Address::Absolute(address, _) => Address::Absolute(address, false),
+            a => a,
+        };
+
         self.ror(address);
         self.adc(address);
     }
@@ -563,11 +618,11 @@ impl CPU {
     }
 
     pub(crate) fn sax(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => self.bus.write(address, self.accumulator & self.x_register));
+        debug_assert_matches!(address, Address::Absolute(address, _) => self.bus.write(address, self.accumulator & self.x_register));
     }
 
     pub(crate) fn sbc(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => {
+        debug_assert_matches!(address, Address::Absolute(address, page_crossed) => {
             let value = self.bus.read(address);
             let carry = self.status.contains(StatusFlags::C) as u16;
 
@@ -588,6 +643,9 @@ impl CPU {
             self.status.set(StatusFlags::N, result_u8 & StatusFlags::N.bits() > 0);
 
             self.accumulator = result_u8;
+            if page_crossed {
+                self.remaining_cycles += 1;
+            }
         });
     }
 
@@ -618,25 +676,35 @@ impl CPU {
     }
 
     pub(crate) fn slo(&mut self, address: Address) {
+        let address = match address {
+            Address::Absolute(address, _) => Address::Absolute(address, false),
+            a => a,
+        };
+
         self.asl(address);
         self.ora(address);
     }
 
     pub(crate) fn sre(&mut self, address: Address) {
+        let address = match address {
+            Address::Absolute(address, _) => Address::Absolute(address, false),
+            a => a,
+        };
+
         self.lsr(address);
         self.eor(address);
     }
 
     pub(crate) fn sta(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => self.bus.write(address, self.accumulator));
+        debug_assert_matches!(address, Address::Absolute(address, _) => self.bus.write(address, self.accumulator));
     }
 
     pub(crate) fn stx(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => self.bus.write(address, self.x_register));
+        debug_assert_matches!(address, Address::Absolute(address, _) => self.bus.write(address, self.x_register));
     }
 
     pub(crate) fn sty(&mut self, address: Address) {
-        debug_assert_matches!(address, Address::Absolute(address) => self.bus.write(address, self.y_register));
+        debug_assert_matches!(address, Address::Absolute(address, _) => self.bus.write(address, self.y_register));
     }
 
     pub(crate) fn tas(&mut self, _address: Address) {
@@ -722,7 +790,7 @@ impl CPU {
             AddressingMode::Absolute => self.absolute(0),
             AddressingMode::AbsoluteX => self.absolute(self.x_register),
             AddressingMode::AbsoluteY => self.absolute(self.y_register),
-            AddressingMode::Immediate => Address::Absolute(self.program_counter),
+            AddressingMode::Immediate => Address::Absolute(self.program_counter, false),
             AddressingMode::Implied => Address::Implied,
             AddressingMode::Indirect => self.indirect(),
             AddressingMode::IndirectX => self.indirect_x(),
@@ -741,13 +809,14 @@ impl CPU {
 
     fn zero_page(&self, offset: u8) -> Address {
         let address = self.bus.read(self.program_counter).wrapping_add(offset);
-        Address::Absolute(address as u16)
+        Address::Absolute(address as u16, false)
     }
 
     fn absolute(&self, offset: u8) -> Address {
         let address = self.bus.read16(self.program_counter);
         let offset_address: u16 = address.wrapping_add(offset as u16);
-        Address::Absolute(offset_address)
+
+        Address::Absolute(offset_address, offset_address & 0xFF00 != address & 0xFF00)
     }
 
     fn indirect(&self) -> Address {
@@ -760,7 +829,7 @@ impl CPU {
 
         let address = address_hi | address_lo;
 
-        Address::Absolute(address)
+        Address::Absolute(address, false)
     }
 
     fn indirect_x(&self) -> Address {
@@ -775,7 +844,7 @@ impl CPU {
 
         let address = address_hi | address_lo;
 
-        Address::Absolute(address)
+        Address::Absolute(address, false)
     }
 
     fn indirect_y(&self) -> Address {
@@ -789,7 +858,7 @@ impl CPU {
 
         let offset_address = address.wrapping_add(u16::from(self.y_register));
 
-        Address::Absolute(offset_address)
+        Address::Absolute(offset_address, offset_address & 0xFF00 != address & 0xFF00)
     }
 }
 

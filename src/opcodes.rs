@@ -3,7 +3,7 @@ use crate::cpu::CPU;
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Address {
     Implied,
-    Absolute(u16),
+    Absolute(u16, bool), // address, is_page_cross
     Relative(u8),
 }
 

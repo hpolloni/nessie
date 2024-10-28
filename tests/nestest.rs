@@ -24,7 +24,7 @@ fn test_nestest_rom() -> Result<(), Box<dyn std::error::Error>> {
     for line in content.lines() {
         let trace = cpu.trace();
 
-        println!("{} | {}", trace, line);
+        println!("{} | {}", line, trace);
 
         // compare PC and hexdump
         assert_eq!(&line[0..15], &trace[0..15]);
@@ -38,7 +38,7 @@ fn test_nestest_rom() -> Result<(), Box<dyn std::error::Error>> {
         // TODO: compare CPU cycles.
         // Disabled for now as addressing mode don't properly address page crosses
         // For example for opcode 9D
-        // assert_eq!(&line[86..], &trace[86..]);
+        assert_eq!(&line[86..], &trace[86..]);
         cpu.step();
     }
 
