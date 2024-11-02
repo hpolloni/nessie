@@ -1,6 +1,6 @@
 use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
 
-use nessie::{bus::Bus, cpu::CPU};
+use nessie::{bus::Bus, cartridge::Cartridge, cpu::CPU, nes::NesBus};
 
 #[test]
 fn test_nestest_rom() -> Result<(), Box<dyn std::error::Error>> {
@@ -9,12 +9,11 @@ fn test_nestest_rom() -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer)?;
 
-    let mut ram = [0u8; 65536];
+    let cartridge = Cartridge::from_rom(&buffer);
+    let bus = NesBus::new(cartridge);
+    let bus = Rc::new(RefCell::new(bus));
 
-    ram[0x8000..0xBFFF].copy_from_slice(&buffer[0x0010..0x400f]);
-    ram[0xC000..0xFFFF].copy_from_slice(&buffer[0x0010..0x400f]);
-
-    let mut cpu = CPU::new(0xC000, Rc::new(RefCell::new(ram)));
+    let mut cpu = CPU::new(0xC000, bus.clone());
 
     // Compare expected output to cpu trace
     let mut file = File::open("roms/nestest/nestest.expected.out")?;
@@ -42,8 +41,13 @@ fn test_nestest_rom() -> Result<(), Box<dyn std::error::Error>> {
         cpu.step();
     }
 
-    assert_eq!(0x00, ram.read(0x02));
-    assert_eq!(0x00, ram.read(0x03));
+    assert_eq!(
+        0x00,
+        bus.read(0x02),
+        "nestest error code: {:4X}",
+        bus.read(0x02)
+    );
+    assert_eq!(0x00, bus.read(0x03));
 
     Ok(())
 }

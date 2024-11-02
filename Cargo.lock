@@ -132,6 +132,7 @@ dependencies = [
  "assert_matches",
  "bitflags",
  "env_logger",
+ "log",
 ]
 
 [[package]]
