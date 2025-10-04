@@ -54,7 +54,7 @@ macro_rules! instr_test {
     ($func_name:ident, $file: expr) => {
         #[test]
         fn $func_name() -> Result<(), Box<dyn std::error::Error>> {
-            run_instr_test_rom(&format!("roms/instr_test-v5/{}.nes", $file))
+            run_instr_test_rom(&format!("roms/external/instr_test-v5/rom_singles/{}.nes", $file))
         }
     };
 }

@@ -139,7 +139,7 @@ fn test_vbl_clear_time_rom() {
     use std::fs;
 
     // Load the ROM file
-    let rom_path = "roms/ppu_tests/blargg_ppu_tests_2005.09.15b/vbl_clear_time.nes";
+    let rom_path = "roms/external/blargg_ppu_tests_2005.09.15b/vbl_clear_time.nes";
     let rom_data = match fs::read(rom_path) {
         Ok(data) => data,
         Err(_) => {
@@ -179,7 +179,7 @@ fn test_palette_ram_rom() {
 
     use std::fs;
 
-    let rom_path = "roms/ppu_tests/blargg_ppu_tests_2005.09.15b/palette_ram.nes";
+    let rom_path = "roms/external/blargg_ppu_tests_2005.09.15b/palette_ram.nes";
     let rom_data = match fs::read(rom_path) {
         Ok(data) => data,
         Err(_) => {

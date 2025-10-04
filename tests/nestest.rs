@@ -4,7 +4,7 @@ use nessie::{bus::Bus, cartridge::Cartridge, cpu::CPU, nes::NesBus};
 
 #[test]
 fn test_nestest_rom() -> Result<(), Box<dyn std::error::Error>> {
-    let mut file = File::open("roms/nestest/nestest.nes")?;
+    let mut file = File::open("roms/external/other/nestest.nes")?;
 
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer)?;
