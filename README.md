@@ -39,6 +39,9 @@ Nessie is an educational NES emulator project that aims to accurately recreate t
 git clone <repository-url>
 cd nessie
 
+# Initialize test ROM submodule (required for running tests)
+git submodule update --init --recursive
+
 # Build the project
 cargo build
 
@@ -48,18 +51,30 @@ cargo test
 
 ### Testing
 
-The project includes comprehensive test suites using authentic NES test ROMs:
+The project includes comprehensive test suites using authentic NES test ROMs from the [nes-test-roms](https://github.com/christopherpow/nes-test-roms) collection:
 
 ```bash
-# Run all tests
+# Run all tests (23 tests total)
 cargo test
 
-# Run CPU validation test (nestest ROM)
-cargo test nestest
+# Run specific test categories
+cargo test nestest           # CPU validation test
+cargo test instr_test        # Individual instruction tests (12 tests)
+cargo test ppu_tests         # PPU functionality tests (8 tests)
 
-# Run individual instruction tests
-cargo test instr_test
+# Run specific PPU test ROMs
+cargo test test_vbl_clear_time_rom    # VBlank timing validation
+cargo test test_palette_ram_rom       # Palette RAM access validation
 ```
+
+#### Test ROM Collection
+The project uses a git submodule containing 60+ test ROM suites including:
+- **nestest** - Comprehensive CPU behavior validation
+- **instr_test-v5** - Individual instruction category tests
+- **blargg_ppu_tests** - PPU register and timing validation
+- **sprite_hit_tests** - Sprite collision detection
+- **apu_tests** - Audio processing unit tests
+- And many more for comprehensive NES hardware validation
 
 ## Architecture
 
@@ -89,12 +104,12 @@ The 6502 CPU implementation includes:
 
 ## Test ROMs
 
-The project uses several test ROM suites located in the `roms/` directory:
+The project uses the comprehensive [nes-test-roms](https://github.com/christopherpow/nes-test-roms) collection via git submodule at `roms/external/`. This provides access to 60+ test ROM suites for validating NES hardware behavior.
 
-- **nestest**: Comprehensive CPU behavior validation
-- **instr_test-v5**: Individual instruction category tests (16 separate ROMs)
-
-These ROMs are used to ensure the emulator matches real NES hardware behavior.
+**Note**: You must initialize the submodule to run tests:
+```bash
+git submodule update --init --recursive
+```
 
 ## Dependencies
 
@@ -113,6 +128,15 @@ The `opcode_table_generator.py` script generates parts of the opcodes module fro
 1. **Unit Tests**: Individual component testing
 2. **Integration Tests**: Full system tests using test ROMs
 3. **Golden Master**: Comparing execution traces against reference implementations
+
+### Updating Test ROMs
+
+To update to the latest test ROMs:
+```bash
+git submodule update --remote
+```
+
+To add new test ROM validation, create tests in the appropriate `tests/*.rs` file that load ROMs from `roms/external/`.
 
 ## Roadmap
 
