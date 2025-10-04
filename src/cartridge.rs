@@ -50,7 +50,8 @@ impl Bus for Cartridge {
                 self.cartridge_ram[address as usize] = value;
             }
             0x8000..=0xFFFF => {
-                panic!("Can't write to cartridge rom address: {:4X}", address)
+                // ROM is read-only, ignore writes
+                // Some test ROMs attempt to write to ROM areas during testing
             }
             _ => panic!("Access to unmapped cartridge address: {:4X}", address),
         }
