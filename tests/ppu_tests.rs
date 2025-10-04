@@ -1,6 +1,62 @@
 use std::{cell::RefCell, rc::Rc};
 use nessie::{bus::Bus, cartridge::Cartridge, cpu::CPU, nes::NesBus};
 
+// PPU (Picture Processing Unit) Tests
+//
+// This module contains tests for the NES PPU implementation, including:
+// - PPU register behavior and timing tests
+// - VBlank and NMI functionality tests
+// - ROM-based validation tests using authentic NES test ROMs
+
+// Helper function to run a ROM test and check for completion
+fn run_rom_test(rom_path: &str, test_description: &str) -> Result<(), Box<dyn std::error::Error>> {
+    use std::fs;
+
+    let rom_data = match fs::read(rom_path) {
+        Ok(data) => data,
+        Err(_) => {
+            println!("Skipping test: {} not found", rom_path);
+            return Ok(());
+        }
+    };
+
+    let cartridge = Cartridge::from_rom(&rom_data);
+    let bus = Rc::new(RefCell::new(NesBus::new(cartridge)));
+    let mut cpu = CPU::new(0x8000, bus.clone());
+
+    for _ in 0..100_000 {
+        cpu.step();
+
+        let result = bus.borrow().read(0x6000);
+        if result < 0x80 {
+            if result == 0x00 {
+                return Ok(()); // Test passed
+            } else {
+                return Err(format!(
+                    "{} test failed with code: {}. Check {}.",
+                    test_description, result, test_description
+                ).into());
+            }
+        }
+    }
+
+    Err(format!("{} test timed out", test_description).into())
+}
+
+// Macro to create ROM tests with minimal boilerplate
+macro_rules! ppu_rom_test {
+    ($test_name:ident, $rom_path:expr, $description:expr) => {
+        #[test]
+        fn $test_name() -> Result<(), Box<dyn std::error::Error>> {
+            run_rom_test($rom_path, $description)
+        }
+    };
+}
+
+// =============================================================================
+// PPU Register Behavior Tests
+// =============================================================================
+
 #[test]
 fn test_ppustatus_read_behavior() {
     // PPUSTATUS ($2002) should have specific behavior:
@@ -42,6 +98,10 @@ fn test_ppu_register_mirroring() {
 
     // This test will verify proper mirroring once implemented
 }
+
+// =============================================================================
+// VBlank and Timing Tests
+// =============================================================================
 
 #[test]
 fn test_vblank_flag_set_on_scanline_241() {
@@ -131,249 +191,52 @@ fn test_nmi_generation_on_vblank() {
     assert!(!bus.should_generate_nmi(), "NMI should not be generated when NMI disabled");
 }
 
-#[test]
-fn test_vbl_clear_time_rom() {
-    // Test the vbl_clear_time.nes ROM to validate VBlank timing behavior
-    // This ROM tests the timing of when the VBlank flag is cleared
+// =============================================================================
+// ROM-Based Validation Tests
+// =============================================================================
+// These tests use authentic NES test ROMs to validate PPU behavior against
+// real hardware. Test ROMs check for specific error codes at memory location
+// $6000, where 0x00 indicates success and any other value indicates failure.
 
-    use std::fs;
+// PPU ROM Tests - using macro for concise test definitions
+ppu_rom_test!(
+    test_vbl_clear_time_rom,
+    "roms/external/blargg_ppu_tests_2005.09.15b/vbl_clear_time.nes",
+    "VBlank timing behavior"
+);
 
-    // Load the ROM file
-    let rom_path = "roms/external/blargg_ppu_tests_2005.09.15b/vbl_clear_time.nes";
-    let rom_data = match fs::read(rom_path) {
-        Ok(data) => data,
-        Err(_) => {
-            // Skip test if ROM file is not available
-            println!("Skipping test: {} not found", rom_path);
-            return;
-        }
-    };
+ppu_rom_test!(
+    test_palette_ram_rom,
+    "roms/external/blargg_ppu_tests_2005.09.15b/palette_ram.nes",
+    "PPU palette memory access"
+);
 
-    let cartridge = Cartridge::from_rom(&rom_data);
-    let bus = Rc::new(RefCell::new(NesBus::new(cartridge)));
-    let mut cpu = CPU::new(0x8000, bus.clone());
+ppu_rom_test!(
+    test_ppu_vbl_nmi_rom,
+    "roms/external/ppu_vbl_nmi/ppu_vbl_nmi.nes",
+    "VBlank NMI timing behavior"
+);
 
-    // Run the test ROM for a limited number of instructions
-    // Blargg's test ROMs write result codes to $6000
-    // $80 = test running, $00-$7F = test complete with result code
-    for _ in 0..100_000 {
-        cpu.step();
+ppu_rom_test!(
+    test_sprite_ram_rom,
+    "roms/external/blargg_ppu_tests_2005.09.15b/sprite_ram.nes",
+    "PPU OAM/sprite memory access"
+);
 
-        // Check test completion
-        let result = bus.borrow().read(0x6000);
-        if result < 0x80 {
-            // Test completed
-            assert_eq!(result, 0x00,
-                "vbl_clear_time test failed with code: {}. Check PPU VBlank timing implementation.",
-                result);
-            return;
-        }
-    }
+ppu_rom_test!(
+    test_vram_access_rom,
+    "roms/external/blargg_ppu_tests_2005.09.15b/vram_access.nes",
+    "PPU VRAM read/write behavior"
+);
 
-    panic!("vbl_clear_time test timed out - ROM may not be running correctly");
-}
+ppu_rom_test!(
+    test_ppu_open_bus_rom,
+    "roms/external/ppu_open_bus/ppu_open_bus.nes",
+    "PPU open bus behavior"
+);
 
-#[test]
-fn test_palette_ram_rom() {
-    // Test the palette_ram.nes ROM to validate palette memory access
-
-    use std::fs;
-
-    let rom_path = "roms/external/blargg_ppu_tests_2005.09.15b/palette_ram.nes";
-    let rom_data = match fs::read(rom_path) {
-        Ok(data) => data,
-        Err(_) => {
-            println!("Skipping test: {} not found", rom_path);
-            return;
-        }
-    };
-
-    let cartridge = Cartridge::from_rom(&rom_data);
-    let bus = Rc::new(RefCell::new(NesBus::new(cartridge)));
-    let mut cpu = CPU::new(0x8000, bus.clone());
-
-    for _ in 0..100_000 {
-        cpu.step();
-
-        let result = bus.borrow().read(0x6000);
-        if result < 0x80 {
-            assert_eq!(result, 0x00,
-                "palette_ram test failed with code: {}. Check PPU palette memory implementation.",
-                result);
-            return;
-        }
-    }
-
-    panic!("palette_ram test timed out");
-}
-
-#[test]
-fn test_ppu_vbl_nmi_rom() {
-    // Test the ppu_vbl_nmi.nes ROM to validate VBlank NMI timing behavior
-    // This ROM tests VBlank flag behavior and NMI timing accuracy
-
-    use std::fs;
-
-    let rom_path = "roms/external/ppu_vbl_nmi/ppu_vbl_nmi.nes";
-    let rom_data = match fs::read(rom_path) {
-        Ok(data) => data,
-        Err(_) => {
-            println!("Skipping test: {} not found", rom_path);
-            return;
-        }
-    };
-
-    let cartridge = Cartridge::from_rom(&rom_data);
-    let bus = Rc::new(RefCell::new(NesBus::new(cartridge)));
-    let mut cpu = CPU::new(0x8000, bus.clone());
-
-    for _ in 0..100_000 {
-        cpu.step();
-
-        let result = bus.borrow().read(0x6000);
-        if result < 0x80 {
-            assert_eq!(result, 0x00,
-                "ppu_vbl_nmi test failed with code: {}. Check PPU VBlank NMI timing implementation.",
-                result);
-            return;
-        }
-    }
-
-    panic!("ppu_vbl_nmi test timed out");
-}
-
-#[test]
-fn test_sprite_ram_rom() {
-    // Test the sprite_ram.nes ROM to validate OAM (sprite memory) access
-
-    use std::fs;
-
-    let rom_path = "roms/external/blargg_ppu_tests_2005.09.15b/sprite_ram.nes";
-    let rom_data = match fs::read(rom_path) {
-        Ok(data) => data,
-        Err(_) => {
-            println!("Skipping test: {} not found", rom_path);
-            return;
-        }
-    };
-
-    let cartridge = Cartridge::from_rom(&rom_data);
-    let bus = Rc::new(RefCell::new(NesBus::new(cartridge)));
-    let mut cpu = CPU::new(0x8000, bus.clone());
-
-    for _ in 0..100_000 {
-        cpu.step();
-
-        let result = bus.borrow().read(0x6000);
-        if result < 0x80 {
-            assert_eq!(result, 0x00,
-                "sprite_ram test failed with code: {}. Check PPU OAM/sprite memory implementation.",
-                result);
-            return;
-        }
-    }
-
-    panic!("sprite_ram test timed out");
-}
-
-#[test]
-fn test_vram_access_rom() {
-    // Test the vram_access.nes ROM to validate VRAM read/write behavior
-
-    use std::fs;
-
-    let rom_path = "roms/external/blargg_ppu_tests_2005.09.15b/vram_access.nes";
-    let rom_data = match fs::read(rom_path) {
-        Ok(data) => data,
-        Err(_) => {
-            println!("Skipping test: {} not found", rom_path);
-            return;
-        }
-    };
-
-    let cartridge = Cartridge::from_rom(&rom_data);
-    let bus = Rc::new(RefCell::new(NesBus::new(cartridge)));
-    let mut cpu = CPU::new(0x8000, bus.clone());
-
-    for _ in 0..100_000 {
-        cpu.step();
-
-        let result = bus.borrow().read(0x6000);
-        if result < 0x80 {
-            assert_eq!(result, 0x00,
-                "vram_access test failed with code: {}. Check PPU VRAM access implementation.",
-                result);
-            return;
-        }
-    }
-
-    panic!("vram_access test timed out");
-}
-
-#[test]
-fn test_ppu_open_bus_rom() {
-    // Test the ppu_open_bus.nes ROM to validate open bus behavior
-
-    use std::fs;
-
-    let rom_path = "roms/external/ppu_open_bus/ppu_open_bus.nes";
-    let rom_data = match fs::read(rom_path) {
-        Ok(data) => data,
-        Err(_) => {
-            println!("Skipping test: {} not found", rom_path);
-            return;
-        }
-    };
-
-    let cartridge = Cartridge::from_rom(&rom_data);
-    let bus = Rc::new(RefCell::new(NesBus::new(cartridge)));
-    let mut cpu = CPU::new(0x8000, bus.clone());
-
-    for _ in 0..100_000 {
-        cpu.step();
-
-        let result = bus.borrow().read(0x6000);
-        if result < 0x80 {
-            assert_eq!(result, 0x00,
-                "ppu_open_bus test failed with code: {}. Check PPU open bus behavior implementation.",
-                result);
-            return;
-        }
-    }
-
-    panic!("ppu_open_bus test timed out");
-}
-
-#[test]
-fn test_ppu_read_buffer_rom() {
-    // Test the test_ppu_read_buffer.nes ROM to validate read buffer behavior
-
-    use std::fs;
-
-    let rom_path = "roms/external/ppu_read_buffer/test_ppu_read_buffer.nes";
-    let rom_data = match fs::read(rom_path) {
-        Ok(data) => data,
-        Err(_) => {
-            println!("Skipping test: {} not found", rom_path);
-            return;
-        }
-    };
-
-    let cartridge = Cartridge::from_rom(&rom_data);
-    let bus = Rc::new(RefCell::new(NesBus::new(cartridge)));
-    let mut cpu = CPU::new(0x8000, bus.clone());
-
-    for _ in 0..100_000 {
-        cpu.step();
-
-        let result = bus.borrow().read(0x6000);
-        if result < 0x80 {
-            assert_eq!(result, 0x00,
-                "ppu_read_buffer test failed with code: {}. Check PPU read buffer implementation.",
-                result);
-            return;
-        }
-    }
-
-    panic!("ppu_read_buffer test timed out");
-}
+ppu_rom_test!(
+    test_ppu_read_buffer_rom,
+    "roms/external/ppu_read_buffer/test_ppu_read_buffer.nes",
+    "PPU read buffer behavior"
+);
