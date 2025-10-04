@@ -206,3 +206,174 @@ fn test_palette_ram_rom() {
 
     panic!("palette_ram test timed out");
 }
+
+#[test]
+fn test_ppu_vbl_nmi_rom() {
+    // Test the ppu_vbl_nmi.nes ROM to validate VBlank NMI timing behavior
+    // This ROM tests VBlank flag behavior and NMI timing accuracy
+
+    use std::fs;
+
+    let rom_path = "roms/external/ppu_vbl_nmi/ppu_vbl_nmi.nes";
+    let rom_data = match fs::read(rom_path) {
+        Ok(data) => data,
+        Err(_) => {
+            println!("Skipping test: {} not found", rom_path);
+            return;
+        }
+    };
+
+    let cartridge = Cartridge::from_rom(&rom_data);
+    let bus = Rc::new(RefCell::new(NesBus::new(cartridge)));
+    let mut cpu = CPU::new(0x8000, bus.clone());
+
+    for _ in 0..100_000 {
+        cpu.step();
+
+        let result = bus.borrow().read(0x6000);
+        if result < 0x80 {
+            assert_eq!(result, 0x00,
+                "ppu_vbl_nmi test failed with code: {}. Check PPU VBlank NMI timing implementation.",
+                result);
+            return;
+        }
+    }
+
+    panic!("ppu_vbl_nmi test timed out");
+}
+
+#[test]
+fn test_sprite_ram_rom() {
+    // Test the sprite_ram.nes ROM to validate OAM (sprite memory) access
+
+    use std::fs;
+
+    let rom_path = "roms/external/blargg_ppu_tests_2005.09.15b/sprite_ram.nes";
+    let rom_data = match fs::read(rom_path) {
+        Ok(data) => data,
+        Err(_) => {
+            println!("Skipping test: {} not found", rom_path);
+            return;
+        }
+    };
+
+    let cartridge = Cartridge::from_rom(&rom_data);
+    let bus = Rc::new(RefCell::new(NesBus::new(cartridge)));
+    let mut cpu = CPU::new(0x8000, bus.clone());
+
+    for _ in 0..100_000 {
+        cpu.step();
+
+        let result = bus.borrow().read(0x6000);
+        if result < 0x80 {
+            assert_eq!(result, 0x00,
+                "sprite_ram test failed with code: {}. Check PPU OAM/sprite memory implementation.",
+                result);
+            return;
+        }
+    }
+
+    panic!("sprite_ram test timed out");
+}
+
+#[test]
+fn test_vram_access_rom() {
+    // Test the vram_access.nes ROM to validate VRAM read/write behavior
+
+    use std::fs;
+
+    let rom_path = "roms/external/blargg_ppu_tests_2005.09.15b/vram_access.nes";
+    let rom_data = match fs::read(rom_path) {
+        Ok(data) => data,
+        Err(_) => {
+            println!("Skipping test: {} not found", rom_path);
+            return;
+        }
+    };
+
+    let cartridge = Cartridge::from_rom(&rom_data);
+    let bus = Rc::new(RefCell::new(NesBus::new(cartridge)));
+    let mut cpu = CPU::new(0x8000, bus.clone());
+
+    for _ in 0..100_000 {
+        cpu.step();
+
+        let result = bus.borrow().read(0x6000);
+        if result < 0x80 {
+            assert_eq!(result, 0x00,
+                "vram_access test failed with code: {}. Check PPU VRAM access implementation.",
+                result);
+            return;
+        }
+    }
+
+    panic!("vram_access test timed out");
+}
+
+#[test]
+fn test_ppu_open_bus_rom() {
+    // Test the ppu_open_bus.nes ROM to validate open bus behavior
+
+    use std::fs;
+
+    let rom_path = "roms/external/ppu_open_bus/ppu_open_bus.nes";
+    let rom_data = match fs::read(rom_path) {
+        Ok(data) => data,
+        Err(_) => {
+            println!("Skipping test: {} not found", rom_path);
+            return;
+        }
+    };
+
+    let cartridge = Cartridge::from_rom(&rom_data);
+    let bus = Rc::new(RefCell::new(NesBus::new(cartridge)));
+    let mut cpu = CPU::new(0x8000, bus.clone());
+
+    for _ in 0..100_000 {
+        cpu.step();
+
+        let result = bus.borrow().read(0x6000);
+        if result < 0x80 {
+            assert_eq!(result, 0x00,
+                "ppu_open_bus test failed with code: {}. Check PPU open bus behavior implementation.",
+                result);
+            return;
+        }
+    }
+
+    panic!("ppu_open_bus test timed out");
+}
+
+#[test]
+fn test_ppu_read_buffer_rom() {
+    // Test the test_ppu_read_buffer.nes ROM to validate read buffer behavior
+
+    use std::fs;
+
+    let rom_path = "roms/external/ppu_read_buffer/test_ppu_read_buffer.nes";
+    let rom_data = match fs::read(rom_path) {
+        Ok(data) => data,
+        Err(_) => {
+            println!("Skipping test: {} not found", rom_path);
+            return;
+        }
+    };
+
+    let cartridge = Cartridge::from_rom(&rom_data);
+    let bus = Rc::new(RefCell::new(NesBus::new(cartridge)));
+    let mut cpu = CPU::new(0x8000, bus.clone());
+
+    for _ in 0..100_000 {
+        cpu.step();
+
+        let result = bus.borrow().read(0x6000);
+        if result < 0x80 {
+            assert_eq!(result, 0x00,
+                "ppu_read_buffer test failed with code: {}. Check PPU read buffer implementation.",
+                result);
+            return;
+        }
+    }
+
+    panic!("ppu_read_buffer test timed out");
+}
