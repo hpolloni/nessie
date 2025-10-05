@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use crate::rendering::{NESFramebuffer, NES_WIDTH, NES_HEIGHT};
 
 bitflags! {
     #[derive(Copy, Clone, Debug)]
@@ -64,6 +65,9 @@ pub struct PPU {
     pub vram: [u8; 0x800],       // Name tables (2KB internal)
     pub palette_ram: [u8; 32],   // Palette memory
     pub oam: [u8; 256],          // Object Attribute Memory (sprites)
+
+    // Framebuffer for rendering
+    pub framebuffer: NESFramebuffer, // Current frame being rendered (palette indices)
 }
 
 impl PPU {
@@ -90,6 +94,8 @@ impl PPU {
             vram: [0; 0x800],
             palette_ram: [0; 32],
             oam: [0; 256],
+
+            framebuffer: [0; NES_WIDTH * NES_HEIGHT], // Initialize with black (palette index 0)
         }
     }
 
@@ -271,5 +277,36 @@ impl PPU {
 
     pub fn nmi_occurred(&self) -> bool {
         self.ctrl.contains(PpuCtrl::NMI_ENABLE) && self.status.contains(PpuStatus::VBLANK)
+    }
+
+    /// Get a reference to the current framebuffer
+    pub fn framebuffer(&self) -> &NESFramebuffer {
+        &self.framebuffer
+    }
+
+    /// Simple test rendering - fills framebuffer with a test pattern
+    /// This is a placeholder until we implement proper PPU rendering
+    pub fn render_test_pattern(&mut self) {
+        for y in 0..NES_HEIGHT {
+            for x in 0..NES_WIDTH {
+                let index = y * NES_WIDTH + x;
+
+                // Create a simple test pattern
+                let color = if (x / 32 + y / 32) % 2 == 0 {
+                    0x0F // White
+                } else {
+                    0x00 // Black
+                };
+
+                self.framebuffer[index] = color;
+            }
+        }
+    }
+
+    /// Render a solid color (for testing)
+    pub fn render_solid_color(&mut self, palette_index: u8) {
+        for pixel in self.framebuffer.iter_mut() {
+            *pixel = palette_index & 0x3F; // Ensure valid palette index
+        }
     }
 }
